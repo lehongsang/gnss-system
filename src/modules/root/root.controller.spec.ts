@@ -1,4 +1,4 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { RootController } from './root.controller';
 import { RootService } from './root.service';
 
@@ -8,7 +8,16 @@ describe('RootController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [RootController],
-      providers: [RootService],
+      providers: [
+        {
+          provide: RootService,
+          useValue: {
+            getHealth: jest.fn(),
+            createFirstAdmin: jest.fn(),
+            getMetadata: jest.fn(),
+          },
+        },
+      ],
     }).compile();
 
     controller = module.get<RootController>(RootController);
