@@ -3,7 +3,7 @@ import { ForbiddenException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../auth/entities/user.entity';
-import { AuthService } from './../auth/auth.service';
+import { AuthService } from '@thallesp/nestjs-better-auth';
 
 @Injectable()
 export class UsersService {

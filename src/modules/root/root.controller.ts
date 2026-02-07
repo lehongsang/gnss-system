@@ -1,4 +1,4 @@
-import { Public } from '@/commons/decorators/app.decorator';
+import { AllowAnonymous } from '@thallesp/nestjs-better-auth';
 import { Doc } from '@/commons/docs/doc.decorator';
 import { DefaultMessageResponseDto } from '@/commons/dtos/default-message-response.dto';
 import { Body, Controller, Get, Post } from '@nestjs/common';
@@ -11,13 +11,13 @@ import { RootService } from './root.service';
 export class RootController {
   constructor(private readonly rootService: RootService) {}
 
-  @Public()
+  @AllowAnonymous()
   @Get('health')
   getHealth(): string {
     return this.rootService.getHealth();
   }
 
-  @Public()
+  @AllowAnonymous()
   @Doc({
     summary: 'Creates the first admin user in the system.',
     description: 'Creates the first admin user in the system.',
@@ -32,7 +32,6 @@ export class RootController {
     return this.rootService.createFirstAdmin(dto);
   }
 
-  @Public()
   @Doc({
     summary: 'Get system metadata.',
     description:
