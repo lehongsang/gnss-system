@@ -1,11 +1,18 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Column, Generated, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import { BeforeInsert, Column, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import { v7 as uuidv7 } from 'uuid';
 
 export class BaseEntity {
   @ApiProperty()
   @PrimaryColumn({ type: 'uuid' })
-  @Generated('uuid')
   id: string;
+
+  @BeforeInsert()
+  generateId() {
+    if (!this.id) {
+      this.id = uuidv7();
+    }
+  }
 
   @ApiProperty()
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })

@@ -9,6 +9,8 @@ import {
 import * as cookieParser from 'cookie-parser';
 import * as compression from 'compression';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { ConfigService } from '@nestjs/config';
+
 import {
   API_GLOBAL_PREFIX,
   APP_NAME,
@@ -73,7 +75,8 @@ async function bootstrap() {
 
   fs.writeFileSync(pathOutputOpenApi, JSON.stringify(documentFactory()));
 
-  const port = process.env.APP_PORT ?? DEFAULT_PORT;
+  const configService = app.get(ConfigService);
+  const port = configService.get<number>('APP_PORT') ?? DEFAULT_PORT;
   await app.listen(port);
   const logger = new Logger('Application');
   logger.log(`Application is running on url http://localhost:${port}`);

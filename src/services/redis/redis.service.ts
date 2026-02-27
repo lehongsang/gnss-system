@@ -1,0 +1,353 @@
+/* eslint-disable */
+import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Redis } from 'ioredis';
+
+/**
+ * RedisService provides a wrapper around ioredis
+ * to simplify publishing, subscribing, and key management.
+ */
+@Injectable()
+export class RedisService implements OnModuleInit, OnModuleDestroy {
+  /**
+   * Redis client instance for general commands.
+   */
+  public readonly client: Redis;
+
+  /**
+   * Dedicated Redis client instance for caching operations (get/set/setex).
+   * This is separate from pub/sub to avoid "subscriber mode" conflicts.
+   */
+  public readonly cacheClient: Redis;
+
+  /**
+   * Redis client instance for publishing messages.
+   */
+  public readonly publisher: Redis;
+
+  /**
+   * Redis client instance for subscribing to messages.
+   */
+  public readonly subscriber: Redis;
+
+  constructor(private readonly configService: ConfigService) {
+    try {
+      const redisUrl = this.configService.get<string>('REDIS_URL');
+      if (!redisUrl) {
+        throw new Error('REDIS_URL is not defined in environment variables');
+      }
+
+      this.client = new Redis(redisUrl);
+      this.cacheClient = this.client.duplicate();
+      this.publisher = this.client.duplicate();
+      this.subscriber = this.client.duplicate();
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to initialize Redis client: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Wait for Redis connections to be ready before proceeding
+   */
+  async onModuleInit(): Promise<void> {
+    try {
+      // Wait for all Redis clients to be ready
+      await Promise.all([
+        this.waitForClientReady(this.client),
+        this.waitForClientReady(this.cacheClient),
+        this.waitForClientReady(this.publisher),
+        this.waitForClientReady(this.subscriber),
+      ]);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to establish Redis connections: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Wait for a Redis client to be ready
+   */
+  private async waitForClientReady(client: Redis): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (client.status === 'ready') {
+        resolve();
+        return;
+      }
+
+      client.once('ready', () => resolve());
+      client.once('error', reject);
+
+      // Timeout after 30 seconds
+      setTimeout(() => {
+        client.removeListener('ready', resolve);
+        client.removeListener('error', reject);
+        reject(new Error('Redis connection timeout'));
+      }, 30000);
+    });
+  }
+
+  /**
+   * Cleanup Redis connections when module is destroyed
+   */
+  async onModuleDestroy(): Promise<void> {
+    try {
+      await Promise.all([
+        this.client?.disconnect(),
+        this.cacheClient?.disconnect(),
+        this.publisher?.disconnect(),
+        this.subscriber?.disconnect(),
+      ]);
+    } catch (error: unknown) {
+      // Log error but don't throw to avoid blocking shutdown
+      // Using process.env.NODE_ENV check to allow console.error in non-production environments
+      if (this.configService.get('NODE_ENV') !== 'production') {
+        console.error('Error during Redis cleanup:', error);
+      }
+    }
+  }
+
+  /**
+   * Waits for a single event from a Redis channel.
+   *
+   * @param channel - Redis channel name
+   * @param timeout - Maximum wait time in ms (default: 5000ms = 5 seconds)
+   * @returns The received message or null if timed out
+   */
+  async waitForEvent(channel: string, timeout = 5000): Promise<string | null> {
+    return new Promise<string | null>((resolve) => {
+      let isResolved = false;
+
+      const timer = setTimeout(() => {
+        if (!isResolved) {
+          isResolved = true;
+          this.subscriber.removeListener('message', onMessage);
+          resolve(null);
+        }
+      }, timeout);
+
+      const onMessage = (receivedChannel: string, message: string): void => {
+        if (receivedChannel === channel && !isResolved) {
+          isResolved = true;
+          clearTimeout(timer);
+          this.subscriber.removeListener('message', onMessage);
+          resolve(message);
+        }
+      };
+
+      // Subscribe to channel first
+      this.subscriber.subscribe(channel).catch((error: unknown) => {
+        if (!isResolved) {
+          isResolved = true;
+          clearTimeout(timer);
+          // Using process.env.NODE_ENV check to allow console.error in non-production environments
+          if (this.configService.get('NODE_ENV') !== 'production') {
+            console.error(`Failed to subscribe to channel ${channel}:`, error);
+          }
+          resolve(null);
+        }
+      });
+
+      this.subscriber.on('message', onMessage);
+    });
+  }
+
+  /**
+   * Removes all keys matching the given prefix pattern.
+   *
+   * The script uses the KEYS command to retrieve all keys matching the pattern,
+   * deletes them, and returns the number of deleted keys.
+   *
+   * @param prefix - The key pattern to match (e.g., "orders:*")
+   * @returns A promise that resolves with the number of deleted keys
+   */
+  public async removeKeyWithPrefix(prefix: string): Promise<number> {
+    try {
+      const luaScript = `
+        local keys = redis.call('KEYS', ARGV[1])
+        local deleted = 0
+        for i = 1, #keys do
+          redis.call('DEL', keys[i])
+          deleted = deleted + 1
+        end
+        return deleted
+      `;
+
+      const result = await this.client.eval(luaScript, 0, prefix);
+      const deleted = typeof result === 'number' ? result : 0;
+      return deleted;
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(
+        `Failed to remove keys with prefix ${prefix}: ${errorMessage}`,
+      );
+    }
+  }
+
+  /**
+   * Publishes a message to a Redis channel
+   *
+   * @param channel - Redis channel name
+   * @param message - Message to publish
+   * @returns Number of subscribers that received the message
+   */
+  public async publish(channel: string, message: string): Promise<number> {
+    try {
+      return await this.publisher.publish(channel, message);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(
+        `Failed to publish message to channel ${channel}: ${errorMessage}`,
+      );
+    }
+  }
+
+  /**
+   * Subscribe to a Redis channel
+   *
+   * @param channel - Redis channel name
+   * @param callback - Function to handle received messages
+   */
+  public async subscribe(
+    channel: string,
+    callback: (channel: string, message: string) => void,
+  ): Promise<void> {
+    try {
+      await this.subscriber.subscribe(channel);
+      this.subscriber.on('message', callback);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(
+        `Failed to subscribe to channel ${channel}: ${errorMessage}`,
+      );
+    }
+  }
+
+  /**
+   * Unsubscribe from a Redis channel
+   *
+   * @param channel - Redis channel name
+   */
+  public async unsubscribe(channel: string): Promise<void> {
+    try {
+      await this.subscriber.unsubscribe(channel);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(
+        `Failed to unsubscribe from channel ${channel}: ${errorMessage}`,
+      );
+    }
+  }
+
+  /**
+   * Atomic increment operation
+   *
+   * @param key - Redis key name
+   * @returns The value after increment
+   */
+  public async incr(key: string): Promise<number> {
+    try {
+      return await this.client.incr(key);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to increment key ${key}: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Atomic decrement operation
+   *
+   * @param key - Redis key name
+   * @returns The value after decrement
+   */
+  public async decr(key: string): Promise<number> {
+    try {
+      return await this.client.decr(key);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to decrement key ${key}: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Get value from Redis
+   *
+   * @param key - Redis key name
+   * @returns The value or null if key doesn't exist
+   */
+  public async get(key: string): Promise<string | null> {
+    try {
+      return await this.cacheClient.get(key);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to get key ${key}: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Set value in Redis
+   *
+   * @param key - Redis key name
+   * @param value - Value to set
+   * @returns OK if successful
+   */
+  public async set(
+    key: string,
+    value: string | number,
+  ): Promise<string | null> {
+    try {
+      return await this.cacheClient.set(key, value.toString());
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to set key ${key}: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Set value in Redis with expiry (seconds)
+   *
+   * @param key - Redis key name
+   * @param seconds - Expiry time in seconds
+   * @param value - Value to set
+   * @returns OK if successful
+   */
+  public async setex(
+    key: string,
+    seconds: number,
+    value: string | number,
+  ): Promise<string> {
+    try {
+      return await this.cacheClient.setex(key, seconds, value.toString());
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to setex key ${key}: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Delete key from Redis
+   *
+   * @param key - Redis key name
+   * @returns Number of keys deleted (0 or 1)
+   */
+  public async del(key: string): Promise<number> {
+    try {
+      return await this.client.del(key);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to delete key ${key}: ${errorMessage}`);
+    }
+  }
+}
