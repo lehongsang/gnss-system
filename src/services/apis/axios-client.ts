@@ -1,7 +1,6 @@
 import Axios, { AxiosError, type AxiosRequestConfig } from "axios";
 import Qs from "qs";
 
-// Create a more descriptively named instance
 export const axiosInstance = Axios.create({
   baseURL: "",
   paramsSerializer: (params) => Qs.stringify(params, { arrayFormat: "repeat" }),
@@ -23,28 +22,27 @@ axiosInstance.interceptors.response.use(
 );
 
 /**
- * Axios client implementation for Orval-generated API clients
- * Used as the custom client instance for Orval API generation
+ * Axios client implementation for Orval-generated API clients.
+ * Uses modern AbortController instead of deprecated CancelToken.
  */
 export const orvalClient = <T>(
   config: AxiosRequestConfig,
   options?: AxiosRequestConfig,
 ): Promise<T> & { cancel: () => void } => {
-  const source = Axios.CancelToken.source();
+  const controller = new AbortController();
   const promise = axiosInstance<T>({
     ...config,
     ...options,
-    cancelToken: source.token,
+    signal: controller.signal,
   });
 
   const promiseWithCancel = promise as Promise<T> & { cancel: () => void };
   promiseWithCancel.cancel = () => {
-    source.cancel("Request was cancelled");
+    controller.abort();
   };
 
   return promiseWithCancel;
 };
 
-// Add more descriptive type names
 export type HttpError<T = unknown> = AxiosError<T>;
 export type RequestBody<T = unknown> = T;
