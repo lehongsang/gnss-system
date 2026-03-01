@@ -1,0 +1,73 @@
+import { createBrowserRouter, Outlet } from "react-router-dom";
+import GuestRoute from "./GuestRoute";
+import NotFound from "./NotFound";
+import ProtectedRoute from "./ProtectedRoute";
+import AppLayout from "@/components/app-layout";
+import Login from "@/pages/login/login";
+import Register from "@/pages/register/register";
+import ForgotPassword from "@/pages/forgot-password/forgot-password";
+import InitAdmin from "@/pages/init-admin/init-admin";
+import Dashboard from "@/pages/dashboard/dashboard";
+
+const Root = () => (
+  <div className="min-h-screen w-full">
+    <Outlet />
+  </div>
+);
+
+export const router = createBrowserRouter([
+  {
+    path: "/",
+    element: <Root />,
+    children: [
+      // Public: Init admin
+      {
+        path: "init-admin",
+        element: <InitAdmin />,
+      },
+      // Guest-only: auth pages
+      {
+        path: "login",
+        element: (
+          <GuestRoute>
+            <Login />
+          </GuestRoute>
+        ),
+      },
+      {
+        path: "register",
+        element: (
+          <GuestRoute>
+            <Register />
+          </GuestRoute>
+        ),
+      },
+      {
+        path: "forgot-password",
+        element: (
+          <GuestRoute>
+            <ForgotPassword />
+          </GuestRoute>
+        ),
+      },
+      // Protected: requires authentication + sidebar layout
+      {
+        element: <ProtectedRoute />,
+        children: [
+          {
+            element: <AppLayout />,
+            children: [
+              {
+                index: true,
+                element: <Dashboard />,
+              },
+              // Add more protected pages here, each gets sidebar + header automatically
+            ],
+          },
+        ],
+      },
+      // 404
+      { path: "*", element: <NotFound /> },
+    ],
+  },
+]);
