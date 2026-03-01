@@ -18,12 +18,24 @@ import {
 } from './commons/constants/app.constants';
 import * as path from 'path';
 import * as fs from 'fs';
+import { LoggerService } from './commons/logger/logger.service';
+import { suppressBetterAuthLogs } from './commons/utils/suppress-better-auth-logs';
+import {
+  AllExceptionsFilter,
+  BetterAuthErrorExceptionFilter,
+  HttpExceptionFilter,
+  CustomExceptionFilter,
+} from './commons/filters';
+import { correlationIdMiddleware } from './commons/middlewares/correlation-id.middleware';
 
 async function bootstrap() {
+  suppressBetterAuthLogs();
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bodyParser: false,
-    logger: ['log', 'error', 'warn', 'verbose'],
+    bufferLogs: true,
   });
+  app.useLogger(app.get(LoggerService));
   app.set('query parser', 'extended');
 
   // Configure CORS
@@ -31,6 +43,10 @@ async function bootstrap() {
     origin: true,
     credentials: true,
   });
+
+  // Register correlation ID middleware - Must be before all other middleware for proper tracking
+  app.use(correlationIdMiddleware);
+
   // Configure global guards
   const reflector = app.get<Reflector>(Reflector);
 
@@ -51,10 +67,22 @@ async function bootstrap() {
   app.setGlobalPrefix(API_GLOBAL_PREFIX, {
     exclude: [`/${API_GLOBAL_PREFIX}/auth/*path`, '/'],
   });
+
+  // Register global exception filters
+  // NestJS checks in REVERSE order: last registered = first checked
+  // Order: AllExceptionsFilter (catch-all, checked last) → BetterAuth → Http → Custom (checked first)
+  const loggerService = app.get(LoggerService);
+  app.useGlobalFilters(
+    new AllExceptionsFilter(loggerService),
+    new BetterAuthErrorExceptionFilter(loggerService),
+    new HttpExceptionFilter(loggerService),
+    new CustomExceptionFilter(loggerService),
+  );
+
   // Show Swagger UI in development: http://localhost:3000/api/docs
   const config = new DocumentBuilder()
     .setTitle(APP_NAME)
-    .setDescription('API documentation for the Anex application.')
+    .setDescription('API documentation for the Nest base application.')
     .setVersion('1.0')
     .setExternalDoc('Authentication Docs', 'auth/docs')
     .build();

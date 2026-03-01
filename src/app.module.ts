@@ -4,6 +4,7 @@ import { DatabaseModule } from './database/database.module';
 import { CombineModule } from './modules/combine.module';
 import { ServicesModule } from './services/services.module';
 import databaseConfig from './database/database.config';
+import { LoggerModule } from './commons/logger/logger.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import databaseConfig from './database/database.config';
       isGlobal: true,
       load: [databaseConfig],
     }),
+    LoggerModule,
     DatabaseModule,
     ServicesModule,
     CombineModule,
