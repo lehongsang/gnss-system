@@ -5,38 +5,6 @@ import { persistQueryClient } from "@tanstack/react-query-persist-client";
 import { RouterProvider } from "react-router-dom";
 import { ThemeProvider } from "./components/ui/theme-provider";
 import { router } from "./routers";
-import React from "react";
-import {
-  getRootControllerGetMetadataQueryKey,
-  useRootControllerGetMetadata,
-} from "./services/apis/gen/queries";
-
-// Hook to update document title based on metadata
-function useMetadataTitle() {
-  const { data: metadata } = useRootControllerGetMetadata({
-    query: {
-      queryKey: getRootControllerGetMetadataQueryKey(),
-    },
-  });
-
-  React.useEffect(() => {
-    if (
-      metadata &&
-      typeof metadata === "object" &&
-      "name" in metadata &&
-      typeof (metadata as Record<string, unknown>).name === "string"
-    ) {
-      document.title = (metadata as Record<string, unknown>).name as string;
-    }
-  }, [metadata]);
-}
-
-// MetadataProvider component
-function MetadataProvider({ children }: { children: React.ReactNode }) {
-  useMetadataTitle();
-
-  return <>{children}</>;
-}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -46,7 +14,7 @@ const queryClient = new QueryClient({
       refetchOnReconnect: true,
       refetchInterval: false,
       refetchIntervalInBackground: false,
-      retry: 1,
+      retry: false,
     },
   },
 });
@@ -65,14 +33,12 @@ persistQueryClient({
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <MetadataProvider>
-        <ThemeProvider defaultTheme="light" storageKey="theme">
-          <div className="min-h-screen bg-background text-foreground antialiased font-sans">
-            <RouterProvider router={router} />
-            <Toaster position="bottom-center" />
-          </div>
-        </ThemeProvider>
-      </MetadataProvider>
+      <ThemeProvider defaultTheme="light" storageKey="theme">
+        <div className="min-h-screen bg-background text-foreground antialiased font-sans">
+          <RouterProvider router={router} />
+          <Toaster position="bottom-center" />
+        </div>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

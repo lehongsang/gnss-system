@@ -39,8 +39,14 @@ export function NavUser({
   const navigate = useNavigate();
 
   const handleLogout = async () => {
-    await authClient.signOut();
-    navigate("/login");
+    try {
+      await authClient.signOut();
+      document.body.style.pointerEvents = "auto";
+      navigate("/login", { replace: true });
+    } catch (error) {
+      console.error("Logout error:", error);
+      document.body.style.pointerEvents = "auto";
+    }
   };
 
   const initials = user.name
@@ -115,7 +121,13 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
+            <DropdownMenuItem
+              onSelect={(e) => {
+                e.preventDefault();
+                handleLogout();
+              }}
+              className="cursor-pointer"
+            >
               <LogOut />
               Log out
             </DropdownMenuItem>
