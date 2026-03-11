@@ -1,13 +1,14 @@
 import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common';
-import { Catch } from '@nestjs/common';
+import { Catch, Injectable } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { CustomException } from '../exceptions/custom.exception';
 import { LoggerService } from '../logger/logger.service';
 import { getCorrelationId } from '../middlewares/correlation-id.middleware';
 
 @Catch(CustomException)
+@Injectable()
 export class CustomExceptionFilter implements ExceptionFilter {
-  constructor(private readonly logger: LoggerService) {}
+  private readonly logger = new LoggerService(CustomExceptionFilter.name);
 
   catch(exception: CustomException, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
@@ -43,11 +44,12 @@ export class CustomExceptionFilter implements ExceptionFilter {
       try {
         // Context is already extracted in CustomException constructor
         const context = exception.context || 'Exception';
+        this.logger.setContext(context);
         this.logger.error(
           exception.message,
-          exception.stack || '',
-          context,
+          undefined,
           correlationId,
+          exception.stack || '',
         );
       } catch {
         // eslint-disable-next-line no-console

@@ -1,5 +1,5 @@
 import type { ArgumentsHost } from '@nestjs/common';
-import { Catch } from '@nestjs/common';
+import { Catch, Injectable } from '@nestjs/common';
 import type { ExceptionFilter } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { LoggerService } from '../logger/logger.service';
@@ -7,8 +7,11 @@ import { getCorrelationId } from '../middlewares/correlation-id.middleware';
 import { APIError } from 'better-auth';
 
 @Catch(APIError)
+@Injectable()
 export class BetterAuthErrorExceptionFilter implements ExceptionFilter {
-  constructor(private readonly logger: LoggerService) {}
+  private readonly logger = new LoggerService(
+    BetterAuthErrorExceptionFilter.name,
+  );
 
   catch(exception: APIError, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
@@ -39,9 +42,9 @@ export class BetterAuthErrorExceptionFilter implements ExceptionFilter {
       try {
         this.logger.error(
           exception.message,
-          exception.stack || '',
-          'BetterAuthError',
+          undefined,
           correlationId,
+          exception.stack || '',
         );
       } catch {
         // eslint-disable-next-line no-console

@@ -20,12 +20,6 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { LoggerService } from './commons/logger/logger.service';
 import { suppressBetterAuthLogs } from './commons/utils/suppress-better-auth-logs';
-import {
-  AllExceptionsFilter,
-  BetterAuthErrorExceptionFilter,
-  HttpExceptionFilter,
-  CustomExceptionFilter,
-} from './commons/filters';
 import { correlationIdMiddleware } from './commons/middlewares/correlation-id.middleware';
 
 async function bootstrap() {
@@ -67,17 +61,6 @@ async function bootstrap() {
   app.setGlobalPrefix(API_GLOBAL_PREFIX, {
     exclude: [`/${API_GLOBAL_PREFIX}/auth/*path`, '/'],
   });
-
-  // Register global exception filters
-  // NestJS checks in REVERSE order: last registered = first checked
-  // Order: AllExceptionsFilter (catch-all, checked last) → BetterAuth → Http → Custom (checked first)
-  const loggerService = app.get(LoggerService);
-  app.useGlobalFilters(
-    new AllExceptionsFilter(loggerService),
-    new BetterAuthErrorExceptionFilter(loggerService),
-    new HttpExceptionFilter(loggerService),
-    new CustomExceptionFilter(loggerService),
-  );
 
   // Show Swagger UI in development: http://localhost:3000/api/docs
   const config = new DocumentBuilder()

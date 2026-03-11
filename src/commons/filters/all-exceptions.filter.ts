@@ -1,6 +1,7 @@
 import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common';
 import { Catch } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { Injectable } from '@nestjs/common';
 import { LoggerService } from '../logger/logger.service';
 import { getCorrelationId } from '../middlewares/correlation-id.middleware';
 
@@ -12,8 +13,9 @@ import { getCorrelationId } from '../middlewares/correlation-id.middleware';
  * MUST be registered FIRST in useGlobalFilters() so it runs LAST (NestJS checks in reverse order).
  */
 @Catch()
+@Injectable()
 export class AllExceptionsFilter implements ExceptionFilter {
-  constructor(private readonly logger: LoggerService) {}
+  private readonly logger = new LoggerService(AllExceptionsFilter.name);
 
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
@@ -28,9 +30,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
     // Always log unhandled exceptions to file — these are critical
     this.logger.error(
       `[UnhandledException] ${message}`,
-      stack || '',
-      'AllExceptionsFilter',
+      undefined,
       correlationId,
+      stack || '',
     );
 
     // Never leak stack trace or internal details to the client

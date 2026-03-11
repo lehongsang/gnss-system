@@ -5,15 +5,25 @@ import { Body, Controller, Get, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { CreateFirstAdminDto, GetMetadataDto } from './dtos/root.dto';
 import { RootService } from './root.service';
+import { LoggerService } from '@/commons/logger/logger.service';
+import { RateLimit } from '@/commons/decorators/rate-limit.decorator';
 
 @ApiTags('Root')
 @Controller()
 export class RootController {
+  private readonly loggerService = new LoggerService(RootController.name);
+
   constructor(private readonly rootService: RootService) {}
 
   @AllowAnonymous()
   @Get('health')
+  @RateLimit({ limit: 10, ttl: 10000 })
   getHealth(): string {
+    this.loggerService.log('Health check');
+    this.loggerService.error('Health check');
+    this.loggerService.warn('Health check');
+    this.loggerService.debug('Health check');
+    this.loggerService.verbose('Health check');
     return this.rootService.getHealth();
   }
 

@@ -1,12 +1,13 @@
 import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common';
-import { Catch, HttpException } from '@nestjs/common';
+import { Catch, HttpException, Injectable } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { LoggerService } from '../logger/logger.service';
 import { getCorrelationId } from '../middlewares/correlation-id.middleware';
 
 @Catch(HttpException)
+@Injectable()
 export class HttpExceptionFilter implements ExceptionFilter {
-  constructor(private readonly logger: LoggerService) {}
+  private readonly logger = new LoggerService(HttpExceptionFilter.name);
 
   catch(exception: HttpException, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
@@ -31,16 +32,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
     if (status >= 500) {
       this.logger.error(
         exception.message,
-        exception.stack || '',
-        'HttpException',
+        undefined,
         correlationId,
+        exception.stack || '',
       );
     } else {
-      this.logger.errorConsoleOnly(
-        exception.message,
-        'HttpException',
-        correlationId,
-      );
+      this.logger.errorConsoleOnly(exception.message, undefined, correlationId);
     }
 
     // Standardized response format — consistent with CustomExceptionFilter
