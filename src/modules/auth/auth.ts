@@ -9,14 +9,14 @@ import type { Pool } from 'pg';
 export const getAuth = (database: Pool, configService: ConfigService) =>
   betterAuth({
     database: database,
-    baseURL: configService.get<string>(
-      'BETTER_AUTH_BASE_URL',
+    baseURL:
+      configService.get<string>('BETTER_AUTH_BASE_URL')?.trim() ||
       'http://localhost:3000/api/auth',
-    ),
+    secret: configService.get<string>('BETTER_AUTH_SECRET'),
     logger: {
+      enabled: true,
       level: 'debug',
     },
-    secret: configService.get<string>('BETTER_AUTH_SECRET'),
     plugins: [
       admin({
         defaultRole: Role.USER,
@@ -28,9 +28,20 @@ export const getAuth = (database: Pool, configService: ConfigService) =>
       jwt(),
       bearer(),
     ],
+    socialProviders: {
+      google: {
+        clientId: configService.get<string>('GOOGLE_CLIENT_ID', ''),
+        clientSecret: configService.get<string>('GOOGLE_CLIENT_SECRET', ''),
+      },
+      facebook: {
+        clientId: configService.get<string>('FACEBOOK_CLIENT_ID', ''),
+        clientSecret: configService.get<string>('FACEBOOK_CLIENT_SECRET', ''),
+      },
+    },
     trustedOrigins: ['*'],
     advanced: {
-      useSecureCookies: false, // Allow JWT cookie in local
+      useSecureCookies: false, // Allow HTTP in local
+      disableCSRFCheck: true, // Disable CSRF for local dev
       database: {
         generateId: () => uuidv7(),
       },
@@ -39,8 +50,7 @@ export const getAuth = (database: Pool, configService: ConfigService) =>
           name: 'session',
           attributes: {
             httpOnly: true,
-            // secure: true,
-            // sameSite: 'strict',
+            sameSite: 'lax',
           },
         },
       },
@@ -76,6 +86,9 @@ export const getAuth = (database: Pool, configService: ConfigService) =>
     },
     account: {
       modelName: 'accounts',
+      accountLinking: {
+        enabled: true,
+      },
     },
     verification: {
       modelName: 'verifications',

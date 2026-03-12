@@ -28,7 +28,7 @@ export class BetterAuthErrorExceptionFilter implements ExceptionFilter {
     response.status(status).json({
       statusCode: status,
       message,
-      code: 'AUTH_ERROR',
+      code: exception.body?.code || 'AUTH_ERROR',
     });
   }
 
@@ -47,8 +47,7 @@ export class BetterAuthErrorExceptionFilter implements ExceptionFilter {
           exception.stack || '',
         );
       } catch {
-        // eslint-disable-next-line no-console
-        console.error('[LoggingError]', 'Failed to log exception');
+        this.logger.errorConsoleOnly(exception.message);
       }
     });
   }

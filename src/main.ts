@@ -19,11 +19,10 @@ import {
 import * as path from 'path';
 import * as fs from 'fs';
 import { LoggerService } from './commons/logger/logger.service';
-import { suppressBetterAuthLogs } from './commons/utils/suppress-better-auth-logs';
 import { correlationIdMiddleware } from './commons/middlewares/correlation-id.middleware';
 
 async function bootstrap() {
-  suppressBetterAuthLogs();
+  // suppressBetterAuthLogs();
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bodyParser: false,
