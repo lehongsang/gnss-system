@@ -1,4 +1,4 @@
-import { Role } from '@/commons/enums/app.enum';
+import { Role, UserStatus } from '@/commons/enums/app.enum';
 import { betterAuth } from 'better-auth';
 import {
   admin,
@@ -47,9 +47,7 @@ export const getAuth = (
     plugins: [
       admin({ defaultRole: Role.USER, adminRoles: [Role.ADMIN] }),
       openAPI({ path: '/docs' }),
-      jwt({
-        jwks: {},
-      }),
+      jwt(),
       bearer(),
       multiSession(),
       twoFactor({
@@ -79,10 +77,11 @@ export const getAuth = (
     },
     trustedOrigins: [
       configService.get<string>('FRONTEND_URL', 'http://localhost:5173'),
+      'http://localhost:3000',
     ],
     advanced: {
-      useSecureCookies: false,
-      disableCSRFCheck: true,
+      useSecureCookies: configService.get<string>('NODE_ENV') === 'production',
+      disableCSRFCheck: configService.get<string>('NODE_ENV') !== 'production',
       database: {
         generateId: () => uuidv7(),
       },
@@ -103,15 +102,27 @@ export const getAuth = (
     emailAndPassword: {
       enabled: true,
       autoSignIn: false,
-      sendPasswordReset: async ({ user, url }: { user: { email: string }; url: string }) => {
+      sendPasswordReset: async ({
+        user,
+        url,
+      }: {
+        user: { email: string };
+        url: string;
+      }) => {
         await mailService.sendPasswordReset(user.email, url);
       },
     },
     emailVerification: {
-      sendOnSignUp: true,
+      sendOnSignUp: false,
       autoSignInAfterVerification: false,
       requireEmailVerification: true,
-      sendVerificationEmail: async ({ user, url }: { user: { email: string }; url: string }) => {
+      sendVerificationEmail: async ({
+        user,
+        url,
+      }: {
+        user: { email: string };
+        url: string;
+      }) => {
         await mailService.sendVerificationEmail(user.email, url);
       },
     },
@@ -127,7 +138,25 @@ export const getAuth = (
       additionalFields: {
         role: { type: 'string', defaultValue: Role.USER },
         twoFactorEnabled: { type: 'boolean', defaultValue: false },
+        phone: { type: 'string' },
+        fullName: { type: 'string' },
+        mediaId: { type: 'number' },
+        cccd: { type: 'string' },
+        dateOfBirth: { type: 'date' },
+        address: { type: 'string' },
+        isVerifiedKyc: { type: 'boolean', defaultValue: false },
+        status: { type: 'string', defaultValue: UserStatus.ACTIVE },
+        language: { type: 'string', defaultValue: 'en' },
+        banned: { type: 'boolean', defaultValue: false },
+        banReason: { type: 'string' },
+        banExpires: { type: 'date' },
       },
+    },
+    twoFactor: {
+      modelName: 'twoFactor',
+    },
+    jwks: {
+      modelName: 'jwks',
     },
     account: {
       modelName: 'account',
