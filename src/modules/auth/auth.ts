@@ -2,11 +2,12 @@ import { Role, UserStatus } from '@/commons/enums/app.enum';
 import { betterAuth } from 'better-auth';
 import {
   admin,
-  openAPI,
   jwt,
   bearer,
   twoFactor,
   multiSession,
+  emailOTP,
+  openAPI,
 } from 'better-auth/plugins';
 import { v7 as uuidv7 } from 'uuid';
 import type { ConfigService } from '@nestjs/config';
@@ -46,12 +47,11 @@ export const getAuth = (
       : undefined,
     plugins: [
       admin({ defaultRole: Role.USER, adminRoles: [Role.ADMIN] }),
-      openAPI({ path: '/docs' }),
       jwt(),
       bearer(),
       multiSession(),
       twoFactor({
-        issuer: configService.get<string>('APP_NAME', 'Nest base'),
+        issuer: configService.get<string>('APP_NAME', 'Nest Base'),
         skipVerificationOnEnable: false,
         otpOptions: {
           digits: 6,
@@ -67,12 +67,28 @@ export const getAuth = (
           },
         },
       }),
+      emailOTP({
+        async sendVerificationOTP({ email, otp }) {
+          await mailService.sendOtp(email, otp);
+        },
+        overrideDefaultEmailVerification: true,
+        sendVerificationOnSignUp: false,
+        expiresIn: 300,
+      }),
+      openAPI({ path: '/docs' }),
     ],
     socialProviders: {
       google: {
         clientId: configService.get<string>('GOOGLE_CLIENT_ID', ''),
         clientSecret: configService.get<string>('GOOGLE_CLIENT_SECRET', ''),
         prompt: 'select_account',
+      },
+      apple: {
+        clientId: configService.get<string>('APPLE_CLIENT_ID', ''),
+        clientSecret: configService.get<string>('APPLE_CLIENT_SECRET', ''),
+        teamId: configService.get<string>('APPLE_TEAM_ID', ''),
+        keyId: configService.get<string>('APPLE_KEY_ID', ''),
+        privateKey: configService.get<string>('APPLE_PRIVATE_KEY', ''),
       },
     },
     trustedOrigins: [
@@ -85,12 +101,6 @@ export const getAuth = (
       database: {
         generateId: () => uuidv7(),
       },
-      onAPIError: {
-        errorURL: configService.get<string>(
-          'FRONTEND_URL',
-          'http://localhost:5173',
-        ),
-      },
     },
     rateLimit: {
       enabled: true,
@@ -98,11 +108,59 @@ export const getAuth = (
       max: 100,
       storage: 'secondary-storage',
       modelName: 'authRateLimit',
+      customRules: {
+        // Send OTP Verification Email (Sign Up)
+        '/email-otp/send-verification-otp': {
+          window: 60,
+          max: 1,
+        },
+        // Send OTP Login
+        '/email-otp/send-otp': {
+          window: 60,
+          max: 1,
+        },
+        // Send OTP two-factor
+        '/two-factor/send-otp': {
+          window: 60,
+          max: 1,
+        },
+        // Sign Up Email
+        '/sign-up/email': {
+          window: 60,
+          max: 1,
+        },
+        // Sign In Email
+        '/sign-in/email': {
+          window: 60,
+          max: 5,
+        },
+        // Sign Up Google
+        '/sign-up/google': {
+          window: 60,
+          max: 5,
+        },
+        // Sign Up Apple
+        '/sign-up/apple': {
+          window: 60,
+          max: 5,
+        },
+        // Forgot Password
+        '/forgot-password': {
+          window: 60,
+          max: 1,
+        },
+        // Reset Password
+        '/reset-password': {
+          window: 60,
+          max: 1,
+        },
+      },
     },
     emailAndPassword: {
       enabled: true,
       autoSignIn: false,
-      sendPasswordReset: async ({
+      requireEmailVerification: true,
+      sendResetPassword: async ({
         user,
         url,
       }: {
@@ -115,16 +173,6 @@ export const getAuth = (
     emailVerification: {
       sendOnSignUp: false,
       autoSignInAfterVerification: false,
-      requireEmailVerification: true,
-      sendVerificationEmail: async ({
-        user,
-        url,
-      }: {
-        user: { email: string };
-        url: string;
-      }) => {
-        await mailService.sendVerificationEmail(user.email, url);
-      },
     },
     session: {
       cookieCache: { enabled: true, maxAge: 300 },
@@ -138,15 +186,8 @@ export const getAuth = (
       additionalFields: {
         role: { type: 'string', defaultValue: Role.USER },
         twoFactorEnabled: { type: 'boolean', defaultValue: false },
-        phone: { type: 'string' },
-        fullName: { type: 'string' },
-        mediaId: { type: 'number' },
-        cccd: { type: 'string' },
-        dateOfBirth: { type: 'date' },
-        address: { type: 'string' },
-        isVerifiedKyc: { type: 'boolean', defaultValue: false },
+        mediaId: { type: 'string' },
         status: { type: 'string', defaultValue: UserStatus.ACTIVE },
-        language: { type: 'string', defaultValue: 'en' },
         banned: { type: 'boolean', defaultValue: false },
         banReason: { type: 'string' },
         banExpires: { type: 'date' },

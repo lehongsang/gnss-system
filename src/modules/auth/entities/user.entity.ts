@@ -4,19 +4,21 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Column, Entity, OneToMany } from 'typeorm';
 import { Account } from './account.entity';
 import { Session } from './session.entity';
+import { Media } from '@/services/storage/entities/media.entity';
+import { JoinColumn, OneToOne } from 'typeorm';
 
 @Entity('user')
 export class User extends BaseEntity {
   @ApiProperty({ description: 'Name of the user' })
   @Column({ type: 'varchar', length: 200, nullable: true })
-  name?: string;
+  name?: string | null;
 
   @ApiProperty({
     description: 'Phone number of the user',
     example: '0901234567',
   })
   @Column({ type: 'varchar', length: 20, nullable: true, unique: true })
-  phone?: string;
+  phone?: string | null;
 
   @ApiProperty({ description: 'Email of the user' })
   @Column({ type: 'varchar', length: 255, unique: true })
@@ -25,28 +27,31 @@ export class User extends BaseEntity {
   @Column({ type: 'boolean' })
   emailVerified: boolean;
 
-  @ApiProperty({ description: 'Full name of the user' })
-  @Column({ type: 'varchar', length: 200, nullable: true })
-  fullName?: string;
+
 
   @Column({ type: 'text', nullable: true })
   image?: string;
 
   @ApiProperty({ description: 'ID of the avatar media' })
-  @Column({ type: 'integer', nullable: true })
-  mediaId?: number;
+  @Column({ type: 'uuid', nullable: true })
+  mediaId?: string | null;
+
+  @ApiProperty({ type: () => Media })
+  @OneToOne(() => Media)
+  @JoinColumn({ name: 'mediaId' })
+  media?: Media;
 
   @ApiProperty({ description: 'CCCD of the user' })
   @Column({ type: 'varchar', length: 20, nullable: true, unique: true })
-  cccd?: string;
+  cccd?: string | null;
 
   @ApiProperty({ description: 'Date of birth of the user' })
   @Column({ type: 'date', nullable: true })
-  dateOfBirth?: Date;
+  dateOfBirth?: Date | null;
 
   @ApiProperty({ description: 'Address of the user' })
   @Column({ type: 'text', nullable: true })
-  address?: string;
+  address?: string | null;
 
   @ApiProperty({ description: 'Is KYC verified' })
   @Column({ type: 'boolean', nullable: true, default: false })
