@@ -5,6 +5,11 @@ import { ConfigService } from '@nestjs/config';
 import { join } from 'path';
 import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
 import { MailService } from './mail/mail.service';
+import { KafkaModule } from './kafka/kafka.module';
+import { StorageModule } from './storage/storage.module';
+import { SearchModule } from './search/search.module';
+
+
 
 @Global()
 @Module({
@@ -37,8 +42,19 @@ import { MailService } from './mail/mail.service';
         },
       }),
     }),
+    KafkaModule,
+    StorageModule,
+    SearchModule,
   ],
   providers: [RedisService, MailService],
-  exports: [RedisService, MailService],
+  exports: [
+    RedisService,
+    MailService,
+    KafkaModule,
+    StorageModule,
+    SearchModule,
+  ],
 })
 export class ServicesModule {}
+
+
