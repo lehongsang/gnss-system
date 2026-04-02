@@ -27,8 +27,6 @@ export class User extends BaseEntity {
   @Column({ type: 'boolean' })
   emailVerified: boolean;
 
-
-
   @Column({ type: 'text', nullable: true })
   image?: string;
 
@@ -74,15 +72,15 @@ export class User extends BaseEntity {
   @OneToMany(() => Account, (account) => account.user)
   accounts: Account[];
 
-  @Column({ type: 'timestamptz', nullable: true })
-  banExpires?: Date;
+  @Column({ type: 'boolean', nullable: true, default: false })
+  twoFactorEnabled?: boolean;
 
-  @Column({ type: 'boolean', nullable: true })
+  @Column({ type: 'boolean', nullable: true, default: false })
   banned?: boolean;
 
   @Column({ type: 'text', nullable: true })
   banReason?: string;
 
-  @Column({ type: 'boolean', nullable: true, default: false })
-  twoFactorEnabled?: boolean;
+  @Column({ type: 'timestamp', nullable: true })
+  banExpires?: Date;
 }

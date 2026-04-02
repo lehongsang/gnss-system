@@ -1,4 +1,6 @@
 import { NestFactory, Reflector } from '@nestjs/core';
+import { Transport } from '@nestjs/microservices';
+import type { MicroserviceOptions } from '@nestjs/microservices';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import {
@@ -28,6 +30,37 @@ async function bootstrap() {
     bodyParser: false,
     bufferLogs: true,
   });
+
+  const configService = app.get(ConfigService);
+
+  // 1. Cấu hình MQTT Microservice (Nhận data trực tiếp từ PAI) 
+  app.connectMicroservice<MicroserviceOptions>({
+    transport: Transport.MQTT,
+    options: {
+      url: configService.get<string>('MQTT_URL') || 'mqtt://localhost:1883',
+      clientId: 'gnss_vision_backend_' + Math.random().toString(16).substring(2, 8),
+    },
+  });
+
+  // 2. Cấu hình Kafka Microservice (Xử lý luồng dữ liệu telemetry)
+  app.connectMicroservice<MicroserviceOptions>({
+    transport: Transport.KAFKA,
+    options: {
+      client: {
+        brokers: [configService.get('KAFKA_BROKER') || 'localhost:9092'],
+      },
+      consumer: {
+        groupId: 'gnss-telemetry-consumer',
+        allowAutoTopicCreation: true,
+        sessionTimeout: 30000, // Tránh lỗi rebalancing khi xử lý DB nặng [cite: 24, 38]
+        heartbeatInterval: 3000,
+      },
+    },
+  });
+
+  // Khởi chạy các Microservices đã kết nối
+  await app.startAllMicroservices();
+  
   app.useLogger(app.get(LoggerService));
   app.set('query parser', 'extended');
 
@@ -85,7 +118,6 @@ async function bootstrap() {
 
   fs.writeFileSync(pathOutputOpenApi, JSON.stringify(documentFactory()));
 
-  const configService = app.get(ConfigService);
   const port = configService.get<number>('APP_PORT') ?? DEFAULT_PORT;
   await app.listen(port);
   const logger = new Logger('Application');

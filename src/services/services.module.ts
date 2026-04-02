@@ -8,6 +8,7 @@ import { MailService } from './mail/mail.service';
 import { KafkaModule } from './kafka/kafka.module';
 import { StorageModule } from './storage/storage.module';
 import { SearchModule } from './search/search.module';
+import { MqttModule } from './mqtt/mqtt.module';
 
 
 
@@ -45,6 +46,7 @@ import { SearchModule } from './search/search.module';
     KafkaModule,
     StorageModule,
     SearchModule,
+    MqttModule,
   ],
   providers: [RedisService, MailService],
   exports: [
@@ -53,6 +55,7 @@ import { SearchModule } from './search/search.module';
     KafkaModule,
     StorageModule,
     SearchModule,
+    MqttModule,
   ],
 })
 export class ServicesModule {}

@@ -1,7 +1,7 @@
 services:
   postgres:
-    container_name: postgres
-    image: postgres:18
+    container_name: postgres-gnss
+    image: postgis/postgis:17-3.5
     restart: always
     env_file:
       - .env
@@ -15,7 +15,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql
     ports:
-      - "${POSTGRES_HOST_PORT:-5432}:5432"
+      - "${POSTGRES_HOST_PORT:-5435}:5432"
     networks:
       - nest_base
     healthcheck:
@@ -25,12 +25,12 @@ services:
       retries: 10
 
   redis:
-    container_name: redis
+    container_name: redis-gnss
     image: redis:8-alpine
     restart: always
     command: redis-server --requirepass ${REDIS_PASSWORD:-password}
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "${REDIS_PORT:-6380}:6379"
     volumes:
       - redisdata:/data
     networks:
@@ -42,18 +42,18 @@ services:
       retries: 5
 
   app:
-    container_name: app
+    container_name: app-gnss
     build:
       context: .
       dockerfile: Dockerfile
     restart: always
     ports:
-      - "${APP_PORT:-3000}:3000"
+      - "${APP_PORT:-3001}:3000"
     env_file:
       - .env
     environment:
       POSTGRES_HOST: postgres
-      # REDIS_URL: redis://:${REDIS_PASSWORD:-password}@redis:6379
+      REDIS_URL: redis://:${REDIS_PASSWORD:-password}@redis:6379
       S3_ENDPOINT: http://seaweedfs-filer:8333
       S3_PUBLIC_URL: http://seaweedfs-filer:8888/buckets/medias
       KAFKA_HOST: redpanda
@@ -64,7 +64,7 @@ services:
       - logs:/app/logs
 
   redpanda:
-    container_name: redpanda
+    container_name: redpanda-gnss
     image: docker.redpanda.com/redpandadata/redpanda:v23.2.1
     command:
       - redpanda
@@ -82,13 +82,13 @@ services:
       - PLAINTEXT://redpanda:29092,OUTSIDE://localhost:9092
       - --check=false
     ports:
-      - "${KAFKA_PORT:-9092}:9092"
+      - "${KAFKA_PORT:-9093}:9092"
       - "29092:29092"
     networks:
       - nest_base
 
   opensearch:
-    container_name: opensearch
+    container_name: opensearch-gnss
     image: opensearchproject/opensearch:2.11.0
     environment:
       - cluster.name=opensearch-cluster
@@ -109,27 +109,27 @@ services:
     volumes:
       - opensearch_data:/usr/share/opensearch/data
     ports:
-      - "${OPENSEARCH_PORT:-9200}:9200"
+      - "${OPENSEARCH_PORT:-9205}:9200"
       - "9600:9600"
     networks:
       - nest_base
 
   opensearch-dashboards:
-    container_name: opensearch-dashboards
+    container_name: opensearch-dashboards-gnss
     image: opensearchproject/opensearch-dashboards:2.11.0
     volumes:
       - ./fluent-bit/opensearch_dashboards.yml:/usr/share/opensearch-dashboards/config/opensearch_dashboards.yml
     ports:
-      - "${DASHBOARDS_PORT:-5601}:5601"
+      - "${DASHBOARDS_PORT:-5605}:5601"
     environment:
-      - OPENSEARCH_HOSTS=https://opensearch:9200
+      - OPENSEARCH_HOSTS=http://opensearch:9200
       - OPENSEARCH_USERNAME=${OPENSEARCH_ADMIN_USER:-admin}
       - OPENSEARCH_PASSWORD=${OPENSEARCH_ADMIN_PASSWORD:-admin}
     networks:
       - nest_base
 
   fluent-bit-shipper:
-    container_name: fluent-bit-shipper
+    container_name: fluent-bit-shipper-gnss
     image: fluent/fluent-bit:latest
     volumes:
       - ./fluent-bit/shipper.conf:/fluent-bit/etc/fluent-bit.conf
@@ -141,7 +141,7 @@ services:
       - redpanda
 
   fluent-bit-indexer:
-    container_name: fluent-bit-indexer
+    container_name: fluent-bit-indexer-gnss
     image: fluent/fluent-bit:latest
     volumes:
       - ./fluent-bit/indexer.conf:/fluent-bit/etc/fluent-bit.conf
@@ -157,7 +157,7 @@ services:
 
   seaweedfs-master:
     image: chrislusf/seaweedfs:latest
-    container_name: seaweedfs-master
+    container_name: seaweedfs-master-gnss
     command: "master -ip=seaweedfs-master -mdir=/data"
     ports:
       - "9333:9333"
@@ -168,7 +168,7 @@ services:
 
   seaweedfs-volume:
     image: chrislusf/seaweedfs:latest
-    container_name: seaweedfs-volume
+    container_name: seaweedfs-volume-gnss
     command: "volume -mserver=seaweedfs-master:9333 -port=8080 -ip=seaweedfs-volume -dir=/data"
     depends_on:
       - seaweedfs-master
@@ -177,20 +177,36 @@ services:
     networks:
       - nest_base
     ports:
-      - "${SEAWEEDFS_VOLUME_PORT:-8080}:8080"
+      - "${SEAWEEDFS_VOLUME_PORT:-8082}:8080"
 
   seaweedfs-filer:
     image: chrislusf/seaweedfs:latest
-    container_name: seaweedfs-filer
+    container_name: seaweedfs-filer-gnss
     command: 'filer -master="seaweedfs-master:9333" -s3 -s3.config="/etc/seaweedfs/s3.json"'
     ports:
-      - "${SEAWEEDFS_FILER_PORT:-8888}:8888"
-      - "${SEAWEEDFS_FILER_S3_PORT:-8333}:8333"
+      - "${SEAWEEDFS_FILER_PORT:-8890}:8888"
+      - "${SEAWEEDFS_FILER_S3_PORT:-8335}:8333"
     volumes:
       - ./seaweedfs/s3.json:/etc/seaweedfs/s3.json
     depends_on:
       - seaweedfs-master
       - seaweedfs-volume
+    networks:
+      - nest_base
+
+  emqx:
+    image: emqx:5.8
+    container_name: emqx-gnss
+    ports:
+      - "1883:1883"   # MQTT TCP
+      - "8083:8083"   # MQTT WebSockets
+      - "8883:8883"   # MQTT MQTTS
+      - "8084:8084"   # MQTT WSS
+      - "18083:18083" # Dashboard
+    environment:
+      - EMQX_ALLOW_ANONYMOUS=true 
+    volumes:
+      - emqx_data:/opt/emqx/data
     networks:
       - nest_base
 
@@ -200,6 +216,7 @@ volumes:
   opensearch_data:
   seaweedfs_data:
   logs:
+  emqx_data:
 
 networks:
   nest_base:
