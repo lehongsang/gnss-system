@@ -14,6 +14,10 @@ import Register from "@/pages/register/register";
 import ForgotPassword from "@/pages/forgot-password/forgot-password";
 import Dashboard from "@/pages/dashboard/dashboard";
 import VerifyOtp from "@/pages/verify-otp/verify-otp";
+import Devices from "@/pages/devices/devices";
+import Users from "@/pages/users/users";
+import Alerts from "@/pages/alerts/alerts";
+import Geofences from "@/pages/geofences/geofences";
 
 const Root = () => {
   const location = useLocation();
@@ -78,6 +82,22 @@ export const router = createBrowserRouter([
               {
                 index: true,
                 element: <Dashboard />,
+              },
+              {
+                path: "devices",
+                element: <Devices />,
+              },
+              {
+                path: "users",
+                element: <Users />,
+              },
+              {
+                path: "alerts",
+                element: <Alerts />,
+              },
+              {
+                path: "geofences",
+                element: <Geofences />,
               },
               // Add more protected pages here, each gets sidebar + header automatically
             ],

@@ -1,10 +1,6 @@
 import * as React from "react";
 import {
-  BookOpen,
-  Bot,
-  Frame,
   Map,
-  PieChart,
   Settings2,
   SquareTerminal,
 } from "lucide-react";
@@ -29,28 +25,24 @@ import {
 const data = {
   navMain: [
     {
-      title: "Dashboard",
-      url: "/",
+      title: "Core Management",
+      url: "#",
       icon: SquareTerminal,
       isActive: true,
-      items: [{ title: "Overview", url: "/" }],
-    },
-    {
-      title: "Models",
-      url: "#",
-      icon: Bot,
       items: [
-        { title: "Genesis", url: "#" },
-        { title: "Explorer", url: "#" },
+        { title: "Dashboard", url: "/" },
+        { title: "Devices", url: "/devices" },
+        { title: "Users", url: "/users" },
       ],
     },
     {
-      title: "Documentation",
+      title: "Tracking & Security",
       url: "#",
-      icon: BookOpen,
+      icon: Map,
+      isActive: true,
       items: [
-        { title: "Introduction", url: "#" },
-        { title: "Get Started", url: "#" },
+        { title: "Geofences", url: "/geofences" },
+        { title: "Alerts", url: "/alerts" },
       ],
     },
     {
@@ -58,17 +50,11 @@ const data = {
       url: "#",
       icon: Settings2,
       items: [
-        { title: "General", url: "#" },
-        { title: "Team", url: "#" },
-        { title: "Billing", url: "#" },
+        { title: "General", url: "/settings" },
       ],
     },
   ],
-  projects: [
-    { name: "Design Engineering", url: "#", icon: Frame },
-    { name: "Sales & Marketing", url: "#", icon: PieChart },
-    { name: "Travel", url: "#", icon: Map },
-  ],
+  projects: [],
 };
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -89,12 +75,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarMenuButton size="lg" asChild>
               <a href="/">
                 <div className="flex aspect-square size-8 items-center justify-center rounded-lg">
-                  <img src={logo} alt="React Base" className="size-6" />
+                  <img src={logo} alt="GNSS Tracker" className="size-6" />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">React Base</span>
+                  <span className="truncate font-semibold">GNSS Tracker</span>
                   <span className="truncate text-xs">
-                    Repository boilerplate
+                    Management System
                   </span>
                 </div>
               </a>
