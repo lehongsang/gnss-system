@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
 import { GetManyBaseQueryParams } from '@/commons/dtos/get-many-base.dto';
-import { DeviceStatus } from '../entities/device.entity';
+import { DeviceStatus } from '@/commons/enums/app.enum';
 
 export class GetDevicesQueryDto extends GetManyBaseQueryParams {
   @ApiProperty({

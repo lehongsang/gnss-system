@@ -17,3 +17,15 @@ export enum UserStatus {
   INACTIVE = 'inactive',
   BANNED = 'banned',
 }
+
+export enum AccuracyStatus {
+  GNSS_ONLY = 'gnss_only',
+  VISION_ONLY = 'vision_only',
+  FUSED = 'fused',
+}
+
+export enum DeviceStatus {
+  ONLINE = 'online',
+  OFFLINE = 'offline',
+  MAINTENANCE = 'maintenance',
+}

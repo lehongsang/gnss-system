@@ -1,16 +1,16 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, Repository } from 'typeorm';
-import { AccuracyStatus, Telemetry } from './entities/telemetry.entity';
+import { Telemetry } from './entities/telemetry.entity';
 import { CreateTelemetryDto, GetTelemetryQueryDto } from './dtos/telemetry.dto';
 import { LoggerService } from '@/commons/logger/logger.service';
 import { KafkaService } from '@/services/kafka/kafka.service';
+import { Location } from '@/commons/interfaces/app.interface';
+import { AccuracyStatus } from '@/commons/enums/app.enum';
 
 interface TelemetryKafkaPayload {
   deviceId?: string;
-  lat?: number;
-  lng?: number;
-  alt?: number;
+  location?: Location;
   accuracyStatus?: AccuracyStatus;
 }
 
@@ -37,21 +37,19 @@ export class TelemetryService implements OnModuleInit {
           
           try {
             const raw = message.value.toString();
-            // Assuming the MQTT message is {"lat": ..., "lng": ...}
+            // Assuming the MQTT message is {"location": {"lat": ..., "lng": ...}}
             // And Kafka key is the deviceId
             const payload = JSON.parse(raw) as TelemetryKafkaPayload;
             const deviceId = message.key?.toString() || payload.deviceId;
             
-            if (!deviceId || payload.lat === undefined || payload.lat === null || payload.lng === undefined || payload.lng === null) {
+            if (!deviceId || !payload.location || payload.location.lat === undefined || payload.location.lat === null || payload.location.lng === undefined || payload.location.lng === null) {
               this.logger.warn(`Invalid telemetry payload from Kafka: ${raw}`);
               continue;
             }
 
             dtos.push({
               deviceId,
-              lat: payload.lat,
-              lng: payload.lng,
-              alt: payload.alt,
+              location: payload.location,
               accuracyStatus: payload.accuracyStatus,
             });
           } catch (e) {
@@ -74,7 +72,7 @@ export class TelemetryService implements OnModuleInit {
     const entity = this.telemetryRepo.create({
       ...dto,
       timestamp: new Date(),
-      geom: `SRID=4326;POINT(${dto.lng} ${dto.lat})`,
+      geom: dto.location ? `SRID=4326;POINT(${dto.location.lng} ${dto.location.lat})` : undefined,
     });
     return this.telemetryRepo.save(entity);
   }
@@ -87,7 +85,7 @@ export class TelemetryService implements OnModuleInit {
       this.telemetryRepo.create({
         ...dto,
         timestamp: new Date(),
-        geom: `SRID=4326;POINT(${dto.lng} ${dto.lat})`,
+        geom: dto.location ? `SRID=4326;POINT(${dto.location.lng} ${dto.location.lat})` : undefined,
       }),
     );
     await this.telemetryRepo.save(entities);

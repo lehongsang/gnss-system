@@ -1,24 +1,18 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsNumber, IsOptional, IsString, IsUUID } from 'class-validator';
-import { AccuracyStatus } from '../entities/telemetry.entity';
+import { IsEnum, IsNumber, IsOptional, IsString, IsUUID, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+import { AccuracyStatus } from '@/commons/enums/app.enum';
+import { LocationDto } from '@/commons/dtos/location.dto';
 
 export class CreateTelemetryDto {
   @ApiProperty({ description: 'Device ID' })
   @IsUUID()
   deviceId: string;
 
-  @ApiProperty({ description: 'Latitude' })
-  @IsNumber()
-  lat: number;
-
-  @ApiProperty({ description: 'Longitude' })
-  @IsNumber()
-  lng: number;
-
-  @ApiProperty({ description: 'Altitude (metres)', required: false })
-  @IsOptional()
-  @IsNumber()
-  alt?: number;
+  @ApiProperty({ type: () => LocationDto })
+  @ValidateNested()
+  @Type(() => LocationDto)
+  location: LocationDto;
 
   @ApiProperty({ enum: AccuracyStatus, required: false })
   @IsOptional()

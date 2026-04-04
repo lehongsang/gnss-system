@@ -2,12 +2,14 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne } from 'typeorm';
 import { Device } from '@/modules/devices/entities/device.entity';
 import { BaseEntity } from '@/commons/entities/base.entity';
+import { IsNotEmpty, IsOptional, IsUUID, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+import { LocationDto } from '@/commons/dtos/location.dto';
+import { Location } from '@/commons/interfaces/app.interface';
+import { PointTransformer } from '@/utils/point-transformer';
+import { AccuracyStatus } from '@/commons/enums/app.enum';
 
-export enum AccuracyStatus {
-  GNSS_ONLY = 'gnss_only',
-  VISION_ONLY = 'vision_only',
-  FUSED = 'fused',
-}
+
 
 /**
  * Telemetry entity – high-frequency time-series data (5–10 Hz).
@@ -18,6 +20,8 @@ export enum AccuracyStatus {
 export class Telemetry extends BaseEntity {
 
   @ApiProperty({ description: 'Device ID (FK)' })
+  @IsUUID()
+  @IsNotEmpty()
   @Column({ type: 'uuid' })
   deviceId: string;
 
@@ -30,17 +34,21 @@ export class Telemetry extends BaseEntity {
   @CreateDateColumn({ type: 'timestamp' })
   timestamp: Date;
 
-  @ApiProperty({ description: 'Latitude' })
-  @Column({ type: 'float' })
-  lat: number;
-
-  @ApiProperty({ description: 'Longitude' })
-  @Column({ type: 'float' })
-  lng: number;
-
-  @ApiProperty({ description: 'Altitude (metres)', nullable: true })
-  @Column({ type: 'float', nullable: true })
-  alt?: number | null;
+  
+  @ApiProperty({
+    type: () => LocationDto,
+    description: 'Geographic location (PostGIS point)',
+    nullable: true,
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => LocationDto)
+  @Column({
+    type: 'point',
+    nullable: true,
+    transformer: PointTransformer,
+  })
+  location?: Location;
 
   @ApiProperty({
     enum: AccuracyStatus,

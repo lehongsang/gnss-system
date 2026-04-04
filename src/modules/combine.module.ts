@@ -12,8 +12,8 @@ import { MediaLogsModule } from './media-logs/media-logs.module';
   imports: [
     AuthModule,
     RootModule,
-    UsersModule,
     DevicesModule,
+    UsersModule,
     TelemetryModule,
     GeofencesModule,
     AlertsModule,
