@@ -38,6 +38,7 @@ export class CustomRateLimitGuard implements CanActivate {
     const decoratorOptions = this.reflector.get<{
       limit?: number;
       ttl?: number;
+      key?: string;
     }>(RATE_LIMIT_METADATA, context.getHandler());
 
     const limit = decoratorOptions?.limit || this.defaultLimit;
@@ -45,7 +46,10 @@ export class CustomRateLimitGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest<Request>();
     const identifier = this.getIdentifier(request);
-    const key = `throttle:${identifier}`;
+
+    // Use custom key if provided, otherwise fallback to global
+    const throttleKey = decoratorOptions?.key || 'global';
+    const key = `throttle:${throttleKey}:${identifier}`;
 
     try {
       const current = await this.redisService.incr(key); // atomic increment

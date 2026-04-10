@@ -71,7 +71,7 @@ export class UsersController {
   }
 
   @AllowAnonymous()
-  @RateLimit({ limit: 1, ttl: 60 })
+  @RateLimit({ limit: 1, ttl: 60, key: 'register' })
   @Post('register')
   @HttpCode(HttpStatus.OK)
   @Doc({
@@ -87,7 +87,7 @@ export class UsersController {
   }
 
   @AllowAnonymous()
-  @RateLimit({ limit: 5, ttl: 60 })
+  @RateLimit({ limit: 5, ttl: 60, key: 'verify-otp' })
   @Post('verify-otp')
   @HttpCode(HttpStatus.OK)
   @Doc({
@@ -103,7 +103,7 @@ export class UsersController {
   }
 
   @AllowAnonymous()
-  @RateLimit({ limit: 1, ttl: 60 })
+  @RateLimit({ limit: 1, ttl: 60, key: 'resend-otp' })
   @Post('resend-otp')
   @HttpCode(HttpStatus.OK)
   @Doc({

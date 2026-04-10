@@ -15,6 +15,10 @@ export const RATE_LIMIT_METADATA = 'rate-limit-options';
  * getProducts() {
  * }
  */
-export function RateLimit(options?: { limit?: number; ttl?: number }) {
+export function RateLimit(options?: {
+  limit?: number;
+  ttl?: number;
+  key?: string;
+}) {
   return SetMetadata(RATE_LIMIT_METADATA, options || {});
 }
