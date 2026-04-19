@@ -44,7 +44,7 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit() {
     try {
-      await this.producer.connect();
+      await this.producer?.connect();
       this.isProducerReady = true;
       this.logger.log('Kafka Producer connected successfully');
     } catch (error) {

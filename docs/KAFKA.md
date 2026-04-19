@@ -85,10 +85,29 @@ export class MyConsumer implements OnModuleInit {
 
 ## 📋 Topics List
 
-| Topic | Description |
-| :--- | :--- |
-| `storage-upload` | Used for processing asynchronous file uploads (S3/SeaweedFS). |
-| `user-registrations` | Used for downstream actions after a user signs up. |
+| Topic | Publisher | Consumer | Description |
+| :--- | :--- | :--- | :--- |
+| `storage-upload` | `StorageService` | `StorageService` | Asynchronous file uploads to S3/SeaweedFS. |
+| `user-registrations` | `AuthService` | `UserService` | Downstream actions after a user signs up. |
+| `gnss.coordinates` | `MqttService` | `GnssService` | Realtime GPS coordinates (lng, lat) bridged from MQTT. |
+| `gnss.alerts` | `MqttService` | `AlertService` | Device alerts (speeding, collision, geo-fence) bridged from MQTT. |
+| `gnss.media.upload` | `MqttService` | `StorageService` | Camera images / short video clips bridged from MQTT → routed to Storage. |
+
+---
+
+## 🔄 MQTT → Kafka Bridge
+
+The `MqttService` acts as an **ingestion gateway**: it subscribes to all `gnss/+/*` topics on the MQTT broker and immediately produces messages into the appropriate Kafka topics, decoupling device communication from business logic.
+
+```
+MQTT Broker
+  gnss/{id}/coordinates  ──▶  Kafka: gnss.coordinates  ──▶  GnssService
+  gnss/{id}/alert        ──▶  Kafka: gnss.alerts        ──▶  AlertService
+  gnss/{id}/image        ──▶  Kafka: gnss.media.upload  ──▶  StorageService
+  gnss/{id}/video        ──▶  Kafka: gnss.media.upload  ──▶  StorageService
+```
+
+See [MQTT.md](./MQTT.md) for the full gateway specification.
 
 ---
 

@@ -1,6 +1,6 @@
 services:
   postgres:
-    container_name: postgres
+    container_name: gnss-postgres
     image: postgres:18
     restart: always
     env_file:
@@ -17,7 +17,7 @@ services:
     ports:
       - "${POSTGRES_HOST_PORT:-5432}:5432"
     networks:
-      - nest_base
+      - datn_gnss
     healthcheck:
       test:
         [
@@ -30,7 +30,7 @@ services:
       start_period: 10s
 
   redis:
-    container_name: redis
+    container_name: gnss-redis
     image: redis:8-alpine
     restart: always
     env_file:
@@ -41,7 +41,7 @@ services:
     volumes:
       - redisdata:/data
     networks:
-      - nest_base
+      - datn_gnss
     healthcheck:
       test:
         [
@@ -54,8 +54,10 @@ services:
       start_period: 10s
 
   app:
-    container_name: app
-    image: ghcr.io/tomotek/tmt-ilupet-api:latest
+    container_name: gnss-app
+    build:
+      context: .
+      dockerfile: Dockerfile
     restart: always
     ports:
       - "${APP_PORT:-3000}:${APP_PORT:-3000}"
@@ -67,10 +69,13 @@ services:
       S3_ENDPOINT: http://seaweedfs:8333
       KAFKA_HOST: redpanda
       KAFKA_PORT: 29092
+      MQTT_HOST: emqx
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      emqx:
         condition: service_healthy
     healthcheck:
       test:
@@ -83,12 +88,12 @@ services:
       retries: 5
       start_period: 20s
     networks:
-      - nest_base
+      - datn_gnss
     volumes:
       - logs:/app/logs
 
   redpanda:
-    container_name: redpanda
+    container_name: gnss-redpanda
     image: docker.redpanda.com/redpandadata/redpanda:v23.2.1
     env_file:
       - .env
@@ -121,10 +126,10 @@ services:
       retries: 5
       start_period: 20s
     networks:
-      - nest_base
+      - datn_gnss
 
   opensearch:
-    container_name: opensearch
+    container_name: gnss-opensearch
     image: opensearchproject/opensearch:2.11.0
     env_file:
       - .env
@@ -160,10 +165,10 @@ services:
       retries: 5
       start_period: 20s
     networks:
-      - nest_base
+      - datn_gnss
 
   opensearch-dashboards:
-    container_name: opensearch-dashboards
+    container_name: gnss-opensearch-dashboards
     image: opensearchproject/opensearch-dashboards:2.11.0
     env_file:
       - .env
@@ -186,10 +191,10 @@ services:
       retries: 5
       start_period: 20s
     networks:
-      - nest_base
+      - datn_gnss
 
   fluent-bit-shipper:
-    container_name: fluent-bit-shipper
+    container_name: gnss-fluent-bit-shipper
     image: fluent/fluent-bit:latest
     env_file:
       - .env
@@ -204,12 +209,12 @@ services:
       retries: 5
       start_period: 10s
     networks:
-      - nest_base
+      - datn_gnss
     depends_on:
       - redpanda
 
   fluent-bit-indexer:
-    container_name: fluent-bit-indexer
+    container_name: gnss-fluent-bit-indexer
     image: fluent/fluent-bit:latest
     env_file:
       - .env
@@ -226,14 +231,14 @@ services:
       retries: 5
       start_period: 10s
     networks:
-      - nest_base
+      - datn_gnss
     depends_on:
       - redpanda
       - opensearch
 
   seaweedfs:
     image: chrislusf/seaweedfs:3.59
-    container_name: seaweedfs
+    container_name: gnss-seaweedfs
     env_file:
       - .env
     command: 'server -master -volume -filer -s3 -s3.config=/etc/seaweedfs/s3.json'
@@ -256,7 +261,30 @@ services:
       - seaweedfs_data:/data
       - ./seaweedfs/s3.json:/etc/seaweedfs/s3.json
     networks:
-      - nest_base
+      - datn_gnss
+
+  emqx:
+    image: emqx:5.8
+    container_name: gnss-emqx
+    ports:
+      - "1883:1883"
+      - "8083:8083"
+      - "8084:8084"
+      - "8883:8883"
+      - "18083:18083"
+    environment:
+      EMQX_DASHBOARD__DEFAULT_USERNAME: admin
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: public
+    healthcheck:
+      test: ["CMD", "/opt/emqx/bin/emqx_ctl", "status"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    volumes:
+      - emqx_data:/opt/emqx/data
+    networks:
+      - datn_gnss
 
 volumes:
   pgdata:
@@ -264,7 +292,8 @@ volumes:
   opensearch_data:
   seaweedfs_data:
   logs:
+  emqx_data:
 
 networks:
-  nest_base:
+  datn_gnss:
     driver: bridge

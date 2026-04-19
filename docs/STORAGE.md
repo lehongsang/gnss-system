@@ -138,10 +138,20 @@ Performs a dual cleanup by removing both the physical file from S3 and its metad
 
 ## 🔄 Automated Tasks (Kafka Consumer)
 
-The `StorageService` also implements `OnModuleInit` to listen for `storage-upload` messages. This is what processes your `isSync = false` uploads in the background. If a message is received:
-1. It decodes the Base64 file buffer.
-2. It uploads the file to the S3 bucket.
-3. It updates the `Media` status from `PENDING` to `COMPLETED`.
+The `StorageService` also implements `OnModuleInit` to listen for Kafka messages from two topics:
+
+| Topic | Trigger | Action |
+|:---|:---|:---|
+| `storage-upload` | `isSync = false` upload | Reads Base64 buffer, uploads to S3, updates `Media` status to `COMPLETED`. |
+| `gnss.media.upload` | MQTT camera data via `MqttService` | Decodes Base64 frame (image/video), uploads to `gnss/images` or `gnss/videos` folder in S3. |
+
+If a message is received from `gnss.media.upload`:
+1. It decodes the Base64 payload sent by the MQTT bridge.
+2. It uploads the file to the S3 bucket under `StoragePath.GNSS_IMAGES` or `StoragePath.GNSS_VIDEOS`.
+3. It saves the `Media` metadata record to the database with the device ID tagged.
+
+> [!NOTE]
+> Hình ảnh / video từ camera GNSS **không** đi qua API upload thông thường. Chúng được ingested hoàn toàn qua kênh MQTT → Kafka → StorageService.
 
 ---
 
@@ -158,6 +168,13 @@ await this.storageService.deleteFile(media.id);
 ### Folder Structure
 Always use the `StoragePath` enum to organize files:
 - `users/avatars`
-- `merchants/logos`
-- `products/galleries`
+- `gnss/images` — ảnh chụp từ camera thiết bị GNSS (ingested qua MQTT → Kafka)
+- `gnss/videos` — video từ camera thiết bị GNSS (ingested qua MQTT → Kafka)
 - `uploads` (Default)
+
+---
+
+## 🔗 Tài liệu liên quan
+
+- [MQTT.md](./MQTT.md) — MQTT Gateway & luồng dữ liệu từ thiết bị
+- [KAFKA.md](./KAFKA.md) — Kafka topics & messaging

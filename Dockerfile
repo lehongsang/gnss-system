@@ -1,36 +1,43 @@
-# Base stage
-FROM node:22-alpine AS base
-RUN apk add --no-cache curl && npm install -g bun
-
-# Build stage
-FROM base AS builder
+# ─── Stage 1: Install dependencies with Bun ───────────────────────────────────
+# Use official Bun image — pre-built, no npm install needed (~10x faster)
+FROM oven/bun:1-alpine AS deps
 
 WORKDIR /app
 
-COPY . .
-# Use bun for faster installation, it works with package-lock.json
+# Copy only manifest files to leverage layer caching
+COPY package.json bun.lockb* package-lock.json* ./
+
+# Install all deps (including devDeps needed for build)
 RUN bun install
-RUN bun run build
 
-# Clean bun cache and remove source files to save space
-RUN bun pm cache clean
-# Note: Keeping dist and node_modules for the next stage
-
-# Production stage
-FROM base
+# ─── Stage 2: Build with Node + NestJS CLI ────────────────────────────────────
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Copy only the necessary files from builder
-COPY --from=builder /app/node_modules ./node_modules
+# Copy node_modules from deps stage
+COPY --from=deps /app/node_modules ./node_modules
+# Copy source code
+COPY . .
+
+# nest build uses tsc/webpack under the hood, runs on Node
+RUN node node_modules/.bin/nest build
+
+# ─── Stage 3: Production image ────────────────────────────────────────────────
+FROM node:22-alpine AS production
+
+# Install curl for healthcheck only
+RUN apk add --no-cache curl
+
+WORKDIR /app
+
+# Copy only what's needed at runtime
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 
-# Environment variables
 ENV NODE_ENV=production
 
-# Expose the application port (matching DEFAULT_PORT in app.constants.ts)
 EXPOSE 3000
 
-# Start the application
 CMD ["node", "dist/main.js"]
