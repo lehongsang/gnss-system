@@ -78,6 +78,19 @@ async findAnswers(keyword: string) {
 
 ---
 
+### 📦 Bulk Indexing (High Performance)
+
+```typescript
+const operations = [
+  { index: { _index: 'products', _id: '1' } },
+  { name: 'Product 1', price: 100 },
+  { index: { _index: 'products', _id: '2' } },
+  { name: 'Product 2', price: 200 },
+];
+await this.searchService.bulk(operations);
+// Much faster than calling indexDocument() 100 times.
+```
+
 ## 📋 Recommended Practices
 
 1.  **Mappings**: Always define explicit mappings for your indices using `createIndex(index, settings)` before indexing data to ensure correct data types (e.g., `keyword` vs `text`).

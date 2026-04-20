@@ -6,6 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
+    "prepare": "husky",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
@@ -60,6 +61,7 @@
     "winston-daily-rotate-file": "^5.0.0"
   },
   "devDependencies": {
+    "husky": "^9.1.7",
     "@eslint/eslintrc": "^3.2.0",
     "@eslint/js": "^9.18.0",
     "@nestjs/cli": "^11.0.0",
@@ -94,12 +96,14 @@
     "moduleFileExtensions": [
       "js",
       "json",
-      "ts"
+      "ts",
+      "mjs"
     ],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
-      "^.+\\.(t|j)s$": "ts-jest"
+      "^.+\\.(t|j)s$": "ts-jest",
+      "^.+\\.mjs$": "babel-jest"
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s"
@@ -110,7 +114,7 @@
     },
     "testEnvironment": "node",
     "transformIgnorePatterns": [
-      "/node_modules/(?!(nanoid)/)"
+      "/node_modules/(?!better-auth|better-call|nanoid)"
     ]
   }
 }
