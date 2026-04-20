@@ -54,11 +54,7 @@ services:
       start_period: 10s
 
   app:
-<<<<<<< HEAD
     container_name: gnss-app
-=======
-    container_name: app
->>>>>>> base-source/main
     build:
       context: .
       dockerfile: Dockerfile
