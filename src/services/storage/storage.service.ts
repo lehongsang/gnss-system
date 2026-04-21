@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Media, MediaStatus } from './entities/media.entity';
+import { Media } from './entities/media.entity';
+import { MediaStatus, StoragePath } from '@/services/storage/storage.enums';
 import { KafkaService } from '../kafka/kafka.service';
 import {
   S3Client,
@@ -13,8 +14,8 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { ConfigService } from '@nestjs/config';
 import sharp from 'sharp';
 import * as path from 'path';
-import { StoragePath } from './storage.enums';
-import { KafkaTopic } from '../kafka/kafka.enum';
+import { KafkaTopic } from '@/services/kafka/kafka.enum';
+
 @Injectable()
 export class StorageService {
   private readonly logger = new Logger(StorageService.name);

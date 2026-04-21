@@ -17,7 +17,7 @@ This project uses **Apache Kafka** for asynchronous communication between servic
 - **Producer**: Send messages to any topic with automatic JSON stringification.
 - **Consumer**: Subscribe to topics with specified `groupId`.
 - **Batch Processing**: Support for `consumeBatch` for high-throughput scenarios.
-- **Resiliancy**:
+- **Resiliancy**: 
   - Automatic producer connection on module init.
   - Graceful disconnection on module destroy.
   - Customizable retry strategies for consumers.
@@ -42,7 +42,6 @@ KAFKA_CLIENT_ID=nest-base
 
 ```typescript
 import { KafkaService } from '@/services/kafka/kafka.service';
-import { KafkaTopic } from '@/services/kafka/kafka.enum';
 
 @Injectable()
 export class MyService {
@@ -53,7 +52,7 @@ export class MyService {
       {
         value: {
           userId,
-          message: 'Welcome to GNSS System!',
+          message: 'Welcome to Nest Base!',
           timestamp: new Date().toISOString()
         }
       }
@@ -84,21 +83,15 @@ export class MyConsumer implements OnModuleInit {
 
 ---
 
-## 📋 Topics List (KafkaTopic enum)
+## 📋 Topics List
 
-| Enum Key | Topic String | Publisher | Consumer | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `AUTH_MAIL` | `auth.mail` | `AuthModule` | `MailService` | Send OTP / password-reset emails. |
-| `AUTH_MAIL_DLQ` | `auth.mail.dlq` | `MailService` | — | Dead-letter queue for failed mail jobs. |
-| `STORAGE_UPLOAD` | `storage.upload` | `StorageService` | `StorageService` | Asynchronous file uploads to SeaweedFS. |
-| `STORAGE_DELETE` | `storage.delete` | `StorageService` | `StorageService` | Async file deletion. |
-| `GNSS_COORDINATES` | `gnss.coordinates` | `MqttService` | `TelemetryService` | Realtime GPS coordinates bridged from MQTT. |
-| `GNSS_ALERTS` | `gnss.alerts` | `MqttService` | `AlertsService` | Device alerts bridged from MQTT. |
-| `GNSS_MEDIA_UPLOAD` | `gnss.media.upload` | `MqttService` | `StorageService` | Camera images / video clips bridged from MQTT. |
-| `GNSS_DEVICE_STATUS` | `gnss.device.status` | `MqttService` | `DeviceStatusService` | Online/offline status updates. |
-
-> [!IMPORTANT]
-> **ALWAYS use `KafkaTopic` enum**, never raw string literals. String literals bypass compile-time checks.
+| Topic | Publisher | Consumer | Description |
+| :--- | :--- | :--- | :--- |
+| `storage-upload` | `StorageService` | `StorageService` | Asynchronous file uploads to S3/SeaweedFS. |
+| `user-registrations` | `AuthService` | `UserService` | Downstream actions after a user signs up. |
+| `gnss.coordinates` | `MqttService` | `GnssService` | Realtime GPS coordinates (lng, lat) bridged from MQTT. |
+| `gnss.alerts` | `MqttService` | `AlertService` | Device alerts (speeding, collision, geo-fence) bridged from MQTT. |
+| `gnss.media.upload` | `MqttService` | `StorageService` | Camera images / short video clips bridged from MQTT → routed to Storage. |
 
 ---
 
@@ -108,8 +101,8 @@ The `MqttService` acts as an **ingestion gateway**: it subscribes to all `gnss/+
 
 ```
 MQTT Broker
-  gnss/{id}/coordinates  ──▶  Kafka: gnss.coordinates  ──▶  TelemetryService
-  gnss/{id}/alert        ──▶  Kafka: gnss.alerts        ──▶  AlertsService
+  gnss/{id}/coordinates  ──▶  Kafka: gnss.coordinates  ──▶  GnssService
+  gnss/{id}/alert        ──▶  Kafka: gnss.alerts        ──▶  AlertService
   gnss/{id}/image        ──▶  Kafka: gnss.media.upload  ──▶  StorageService
   gnss/{id}/video        ──▶  Kafka: gnss.media.upload  ──▶  StorageService
 ```

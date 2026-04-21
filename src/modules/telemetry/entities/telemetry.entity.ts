@@ -4,50 +4,95 @@ import {
   ManyToOne,
   JoinColumn,
   Index,
-  PrimaryGeneratedColumn,
+  DeleteDateColumn,
+  UpdateDateColumn,
 } from 'typeorm';
+import { BaseEntity } from '@/commons/entities/base.entity';
 import { Device } from '@/modules/devices/entities/device.entity';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { AccuracyStatus } from '@/commons/enums/app.enum';
+import {
+  IsDate,
+  IsEnum,
+  IsLatitude,
+  IsLongitude,
+  IsNotEmpty,
+  IsNumber,
+  IsUUID,
+  Max,
+  Min,
+} from 'class-validator';
 
-export enum AccuracyStatus {
-  GNSS_ONLY = 'gnss_only',
-  VISION_ONLY = 'vision_only',
-  FUSED = 'fused',
-}
+export { AccuracyStatus };
 
 @Entity('telemetry')
 @Index(['deviceId', 'timestamp'])
-export class Telemetry {
-  @ApiProperty()
-  @PrimaryGeneratedColumn('increment')
-  id: number;
-
-  @ApiProperty()
+export class Telemetry extends BaseEntity {
+  @ApiProperty({ description: 'Device UUID (FK)' })
   @Column({ type: 'uuid', name: 'device_id', nullable: false })
+  @IsNotEmpty()
+  @IsUUID('7')
   deviceId: string;
 
   @ManyToOne(() => Device, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'device_id' })
   device: Device;
 
-  @ApiProperty()
+  @ApiProperty({ description: 'UTC timestamp of the GPS fix' })
   @Column({ type: 'timestamp', nullable: false })
+  @IsNotEmpty()
+  @IsDate()
   timestamp: Date;
 
-  @ApiProperty()
+  @ApiProperty({ description: 'Latitude in decimal degrees (WGS84)' })
   @Column({ type: 'float', nullable: false })
+  @IsNotEmpty()
+  @IsLatitude()
   lat: number;
 
-  @ApiProperty()
+  @ApiProperty({ description: 'Longitude in decimal degrees (WGS84)' })
   @Column({ type: 'float', nullable: false })
+  @IsNotEmpty()
+  @IsLongitude()
   lng: number;
 
-  @ApiProperty({ enum: AccuracyStatus, required: false })
+  @ApiProperty({ description: 'Speed in km/h reported by device' })
+  @Column({ type: 'float', nullable: false })
+  @IsNotEmpty()
+  @IsNumber()
+  @Min(0)
+  speed: number;
+
+  @ApiProperty({ description: 'Heading in degrees (0–360)' })
+  @Column({ type: 'float', nullable: false })
+  @IsNotEmpty()
+  @IsNumber()
+  @Min(0)
+  @Max(360)
+  heading: number;
+
+  @ApiProperty({ description: 'Altitude in metres above sea level' })
+  @Column({ type: 'float', nullable: false })
+  @IsNotEmpty()
+  @IsNumber()
+  altitude: number;
+
+  @ApiProperty({ enum: AccuracyStatus, description: 'Sensor fusion mode' })
   @Column({
     type: 'enum',
     enum: AccuracyStatus,
-    nullable: true,
+    nullable: false,
     name: 'accuracy_status',
   })
-  accuracyStatus: AccuracyStatus | null;
+  @IsNotEmpty()
+  @IsEnum(AccuracyStatus)
+  accuracyStatus: AccuracyStatus;
+
+  @ApiProperty()
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
+
+  @ApiPropertyOptional()
+  @DeleteDateColumn({ name: 'deleted_at' })
+  deletedAt: Date | null;
 }

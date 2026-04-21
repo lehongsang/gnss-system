@@ -1,20 +1,16 @@
 import { Injectable, OnModuleInit, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { AccuracyStatus, Telemetry } from './entities/telemetry.entity';
+import { Telemetry } from './entities/telemetry.entity';
 import {
   TelemetryHistoryQueryDto,
   NearbyQueryDto,
 } from './dtos/query-telemetry.dto';
 import { DevicesService } from '@/modules/devices/devices.service';
 import { GetManyBaseResponseDto } from '@/commons/dtos/get-many-base.dto';
+import type { CoordinatePayload } from '@/commons/interfaces/app.interface';
 
-interface CoordinatePayload {
-  lat: number;
-  lng: number;
-  timestamp: Date;
-  accuracyStatus?: AccuracyStatus;
-}
+
 
 @Injectable()
 export class TelemetryService implements OnModuleInit {

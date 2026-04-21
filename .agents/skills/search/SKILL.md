@@ -23,3 +23,4 @@ Advanced standards for **OpenSearch** integration, universal search, and high-pe
 
 ## 🔗 5. References
 - [SERVICE.md](./references/SERVICE.md) (Indexing, Bulk, and DSL Query samples)
+- [SEARCH.md](./references/SEARCH.md) (Full configuration, usage guide, best practices)

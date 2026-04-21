@@ -1,53 +1,90 @@
-import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  Index,
+  UpdateDateColumn,
+  DeleteDateColumn,
+} from 'typeorm';
 import { BaseEntity } from '@/commons/entities/base.entity';
 import { Device } from '@/modules/devices/entities/device.entity';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { AlertType } from '@/commons/enums/app.enum';
+import {
+  IsBoolean,
+  IsEnum,
+  IsLatitude,
+  IsLongitude,
+  IsNotEmpty,
+  IsString,
+  IsUrl,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
 
-export enum AlertType {
-  TRAJECTORY_DEVIATION = 'trajectory_deviation',
-  DANGEROUS_OBSTACLE = 'dangerous_obstacle',
-  SIGNAL_LOST = 'signal_lost',
-  GEOFENCE_EXIT = 'geofence_exit',
-  SPEEDING = 'speeding',
-}
+export { AlertType };
 
 @Entity('alerts')
 @Index(['deviceId', 'createdAt'])
 export class Alert extends BaseEntity {
-  @ApiProperty({ required: false })
-  @Column({ type: 'uuid', name: 'device_id', nullable: true })
-  deviceId: string | null;
+  @ApiProperty({ description: 'Device UUID that triggered the alert' })
+  @Column({ type: 'uuid', name: 'device_id', nullable: false })
+  @IsNotEmpty()
+  @IsUUID('7')
+  deviceId: string;
 
-  @ManyToOne(() => Device, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => Device, { nullable: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'device_id' })
   device: Device;
 
-  @ApiProperty({ enum: AlertType })
+  @ApiProperty({ enum: AlertType, description: 'Category of the alert' })
   @Column({
     type: 'enum',
     enum: AlertType,
     name: 'alert_type',
     nullable: false,
   })
+  @IsNotEmpty()
+  @IsEnum(AlertType)
   alertType: AlertType;
 
-  @ApiProperty({ required: false })
-  @Column({ type: 'text', nullable: true })
-  message: string | null;
+  @ApiProperty({ description: 'Human-readable alert description' })
+  @Column({ type: 'text', nullable: false })
+  @IsNotEmpty()
+  @IsString()
+  @MaxLength(2000)
+  message: string;
 
-  @ApiProperty({ required: false })
-  @Column({ type: 'float', nullable: true })
-  lat: number | null;
+  @ApiProperty({ description: 'Latitude where the alert occurred' })
+  @Column({ type: 'float', nullable: false })
+  @IsNotEmpty()
+  @IsLatitude()
+  lat: number;
 
-  @ApiProperty({ required: false })
-  @Column({ type: 'float', nullable: true })
-  lng: number | null;
+  @ApiProperty({ description: 'Longitude where the alert occurred' })
+  @Column({ type: 'float', nullable: false })
+  @IsNotEmpty()
+  @IsLongitude()
+  lng: number;
 
-  @ApiProperty({ required: false })
-  @Column({ type: 'varchar', nullable: true, name: 'snapshot_url' })
-  snapshotUrl: string | null;
+  @ApiProperty({ description: 'URL to a snapshot taken at the time of alert' })
+  @Column({ type: 'varchar', nullable: false, name: 'snapshot_url' })
+  @IsNotEmpty()
+  @IsUrl()
+  snapshotUrl: string;
+
+  @ApiProperty({ description: 'Whether the alert has been acknowledged / resolved' })
+  @Column({ type: 'boolean', default: false, name: 'is_resolved' })
+  @IsNotEmpty()
+  @IsBoolean()
+  isResolved: boolean;
 
   @ApiProperty()
-  @Column({ type: 'boolean', default: false, name: 'is_resolved' })
-  isResolved: boolean;
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
+
+  @ApiPropertyOptional()
+  @DeleteDateColumn({ name: 'deleted_at' })
+  deletedAt: Date | null;
 }

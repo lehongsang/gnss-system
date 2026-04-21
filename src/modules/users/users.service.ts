@@ -8,16 +8,7 @@ import { AuthService as BetterAuthService } from '@thallesp/nestjs-better-auth';
 import { ConfigService } from '@nestjs/config';
 import { StorageService } from '@/services/storage/storage.service';
 import { User } from '@/modules/auth/entities/user.entity';
-
 import { StoragePath } from '@/services/storage/storage.enums';
-
-export interface RegistrationUserData {
-  email: string;
-  password: string;
-  name: string;
-  otp: string;
-  createdAt: number;
-}
 
 @Injectable()
 export class UsersService implements OnModuleInit {

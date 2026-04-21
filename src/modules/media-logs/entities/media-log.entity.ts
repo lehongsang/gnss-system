@@ -1,37 +1,68 @@
-import { Entity, Column, ManyToOne, JoinColumn, Index } from 'typeorm';
+import {
+  Entity,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  Index,
+  UpdateDateColumn,
+  DeleteDateColumn,
+} from 'typeorm';
 import { BaseEntity } from '@/commons/entities/base.entity';
 import { Device } from '@/modules/devices/entities/device.entity';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { MediaType } from '@/commons/enums/app.enum';
+import {
+  IsDateString,
+  IsEnum,
+  IsNotEmpty,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 
-export enum MediaType {
-  VIDEO_CHUNK = 'video_chunk',
-  IMAGE_FRAME = 'image_frame',
-}
+export { MediaType };
 
 @Entity('media_logs')
 @Index(['deviceId', 'startTime'])
 export class MediaLog extends BaseEntity {
-  @ApiProperty({ required: false })
-  @Column({ type: 'uuid', name: 'device_id', nullable: true })
-  deviceId: string | null;
+  @ApiProperty({ description: 'Device UUID that produced this media record' })
+  @Column({ type: 'uuid', name: 'device_id', nullable: false })
+  @IsNotEmpty()
+  @IsUUID('7')
+  deviceId: string;
 
-  @ManyToOne(() => Device, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => Device, { nullable: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'device_id' })
   device: Device;
 
-  @ApiProperty({ required: false })
-  @Column({ type: 'timestamp', name: 'start_time', nullable: true })
-  startTime: Date | null;
+  @ApiProperty({ description: 'Start timestamp of the recording' })
+  @Column({ type: 'timestamp', name: 'start_time', nullable: false })
+  @IsNotEmpty()
+  @IsDateString()
+  startTime: Date;
 
-  @ApiProperty({ required: false })
-  @Column({ type: 'timestamp', name: 'end_time', nullable: true })
-  endTime: Date | null;
+  @ApiProperty({ description: 'End timestamp of the recording' })
+  @Column({ type: 'timestamp', name: 'end_time', nullable: false })
+  @IsNotEmpty()
+  @IsDateString()
+  endTime: Date;
 
-  @ApiProperty({ enum: MediaType, required: false })
-  @Column({ type: 'enum', enum: MediaType, name: 'media_type', nullable: true })
-  mediaType: MediaType | null;
+  @ApiProperty({ enum: MediaType, description: 'Type of media (video chunk or image frame)' })
+  @Column({ type: 'enum', enum: MediaType, name: 'media_type', nullable: false })
+  @IsNotEmpty()
+  @IsEnum(MediaType)
+  mediaType: MediaType;
+
+  @ApiProperty({ description: 'S3 object key used to generate presigned URLs' })
+  @Column({ type: 'varchar', nullable: false, name: 'file_url' })
+  @IsNotEmpty()
+  @IsString()
+  fileUrl: string;
 
   @ApiProperty()
-  @Column({ type: 'varchar', nullable: false, name: 'file_url' })
-  fileUrl: string;
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
+
+  @ApiPropertyOptional()
+  @DeleteDateColumn({ name: 'deleted_at' })
+  deletedAt: Date | null;
 }

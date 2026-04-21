@@ -1,11 +1,6 @@
 import { BaseEntity } from '@/commons/entities/base.entity';
 import { Column, Entity } from 'typeorm';
-
-export enum MediaStatus {
-  PENDING = 'PENDING',
-  COMPLETED = 'COMPLETED',
-  FAILED = 'FAILED',
-}
+import { MediaStatus } from '@/services/storage/storage.enums';
 
 @Entity('medias')
 export class Media extends BaseEntity {
@@ -34,3 +29,4 @@ export class Media extends BaseEntity {
   })
   status: MediaStatus;
 }
+

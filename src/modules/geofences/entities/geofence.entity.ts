@@ -1,19 +1,38 @@
-import { Entity, Column, ManyToOne, JoinColumn, ManyToMany, JoinTable } from 'typeorm';
+import {
+  Entity,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  ManyToMany,
+  JoinTable,
+  UpdateDateColumn,
+  DeleteDateColumn,
+} from 'typeorm';
 import { BaseEntity } from '@/commons/entities/base.entity';
 import { User } from '@/modules/auth/entities/user.entity';
 import { Device } from '@/modules/devices/entities/device.entity';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
 
 @Entity('geofences')
 export class Geofence extends BaseEntity {
-  @ApiProperty()
+  @ApiProperty({ description: 'Human-readable geofence name' })
   @Column({ type: 'varchar', nullable: false })
+  @IsNotEmpty()
+  @IsString()
+  @MaxLength(255)
   name: string;
 
-  // geom column will be added via SQL extension: ALTER TABLE geofences ADD COLUMN geom geometry(Polygon, 4326) NOT NULL;
-
-  @ApiProperty({ required: false })
+  @ApiPropertyOptional({ description: 'UUID of the user who created this geofence' })
   @Column({ type: 'uuid', name: 'created_by', nullable: true })
+  @IsOptional()
+  @IsUUID('7')
   createdBy: string | null;
 
   @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
@@ -27,4 +46,12 @@ export class Geofence extends BaseEntity {
     inverseJoinColumn: { name: 'device_id', referencedColumnName: 'id' },
   })
   devices: Device[];
+
+  @ApiProperty()
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
+
+  @ApiPropertyOptional()
+  @DeleteDateColumn({ name: 'deleted_at' })
+  deletedAt: Date | null;
 }

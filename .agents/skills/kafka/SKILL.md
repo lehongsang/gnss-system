@@ -23,8 +23,11 @@ Standards for asynchronous communication and error handling using Kafka.
   - Monitor consumer lag to adjust fetching strategies or parallelize.
 
 ## 4. Topic Mapping
-- `auth.mail` -> `auth.mail.dlq`
-- `storage.upload` -> `storage.upload.dlq`
+- `auth.mail` → `auth.mail.dlq`
+- `storage.upload` → `storage.upload.dlq`
+- `gnss.coordinates` → (no DLQ; data loss tolerable for stale GPS points)
+- `gnss.alerts` → `gnss.alerts.dlq`
+- `gnss.media.upload` → `gnss.media.upload.dlq`
 
 ## 5. References
-See [KAFKA.md](./references/KAFKA.md) for setup details.
+- [KAFKA.md](./references/KAFKA.md) — Full topic list, KafkaTopic enum, producer/consumer examples, MQTT bridge details

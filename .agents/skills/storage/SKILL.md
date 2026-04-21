@@ -29,4 +29,5 @@ Advanced standards for S3-compatible storage, image processing with Sharp, and K
 
 - [CONTROLLER.md](./references/CONTROLLER.md) (Decorators, Pipes, API Boundary)
 - [SERVICE.md](./references/SERVICE.md) (Internal logic, Uploader, Presigner)
+- [STORAGE.md](./references/STORAGE.md) (Full usage guide, Kafka consumer, folder structure, best practices)
 - `src/services/storage/entities/media.entity.ts` (Data Structure)

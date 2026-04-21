@@ -1,28 +1,45 @@
-import { IsNotEmpty, IsOptional, IsString, IsUUID, IsLatitude, IsLongitude, IsUrl, IsEnum } from 'class-validator';
-import { AlertType } from '../entities/alert.entity';
+import { ApiProperty } from '@nestjs/swagger';
+import {
+  IsNotEmpty,
+  IsString,
+  IsUUID,
+  IsLatitude,
+  IsLongitude,
+  IsUrl,
+  IsEnum,
+  MaxLength,
+} from 'class-validator';
+import { AlertType } from '@/commons/enums/app.enum';
 
 export class CreateAlertDto {
-  @IsUUID('7')
+  @ApiProperty({ description: 'UUID of the device that triggered the alert' })
   @IsNotEmpty()
+  @IsUUID('7')
   deviceId: string;
 
-  @IsEnum(AlertType)
+  @ApiProperty({ enum: AlertType, description: 'Category of the alert' })
   @IsNotEmpty()
+  @IsEnum(AlertType)
   alertType: AlertType;
 
-  @IsOptional()
+  @ApiProperty({ description: 'Human-readable alert message' })
+  @IsNotEmpty()
   @IsString()
-  message?: string;
+  @MaxLength(2000)
+  message: string;
 
-  @IsOptional()
+  @ApiProperty({ example: 10.7769, description: 'Latitude where the alert occurred' })
+  @IsNotEmpty()
   @IsLatitude()
-  lat?: number;
+  lat: number;
 
-  @IsOptional()
+  @ApiProperty({ example: 106.6958, description: 'Longitude where the alert occurred' })
+  @IsNotEmpty()
   @IsLongitude()
-  lng?: number;
+  lng: number;
 
-  @IsOptional()
+  @ApiProperty({ description: 'URL to a snapshot taken at the time of the alert' })
+  @IsNotEmpty()
   @IsUrl()
-  snapshotUrl?: string;
+  snapshotUrl: string;
 }

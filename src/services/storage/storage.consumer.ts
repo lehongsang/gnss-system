@@ -2,16 +2,13 @@ import { Injectable, OnModuleInit } from '@nestjs/common';
 import { KafkaService } from '@/services/kafka/kafka.service';
 import { StorageService } from './storage.service';
 import { EachMessageHandler } from 'kafkajs';
-import { KafkaConsumerGroup, KafkaTopic } from '../kafka/kafka.enum';
+import {
+  KafkaConsumerGroup,
+  KafkaTopic,
+} from '@/services/kafka/kafka.enum';
 import { LoggerService } from '@/commons/logger/logger.service';
+import type { StorageUploadMessage } from './storage.interface';
 
-export type StorageUploadMessage = {
-  mediaId: string;
-  fileUrl: string;
-  mimeType: string;
-  filename: string;
-  folder: string;
-};
 
 @Injectable()
 export class StorageConsumer implements OnModuleInit {

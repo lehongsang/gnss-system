@@ -8,7 +8,7 @@ services:
     environment:
       POSTGRES_USER: "${POSTGRES_USERNAME:-postgres}"
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-nest-base}
+      POSTGRES_DB: ${POSTGRES_DB:-gnss_system}
       POSTGRES_HOST_AUTH_METHOD: trust
       PGUSER: "${POSTGRES_USERNAME:-postgres}"
       PGPASSWORD: "${POSTGRES_PASSWORD:-postgres}"
@@ -22,7 +22,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "pg_isready -h localhost -p 5432 -U ${POSTGRES_USERNAME:-postgres} -d ${POSTGRES_DB:-nest-base}",
+          "pg_isready -h localhost -p 5432 -U ${POSTGRES_USERNAME:-postgres} -d ${POSTGRES_DB:-gnss_system}",
         ]
       interval: 5s
       timeout: 5s
@@ -296,7 +296,7 @@ services:
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: redpanda:29092
       DYNAMIC_CONFIG_ENABLED: "true"
     networks:
-      - nest_base
+      - datn_gnss
     depends_on:
       - redpanda
 

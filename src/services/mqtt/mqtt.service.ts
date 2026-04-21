@@ -1,24 +1,16 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  OnModuleDestroy,
+  Logger,
+} from '@nestjs/common';
 import * as mqtt from 'mqtt';
 import { KafkaService } from '../kafka/kafka.service';
-
-interface CoordinatesPayload {
-  lng: number;
-  lat: number;
-  speed: number;
-  heading: number;
-  altitude: number;
-  timestamp: string;
-}
-
-interface AlertPayload {
-  type: string;
-  severity: string;
-  message: string;
-  lng: number;
-  lat: number;
-  timestamp: string;
-}
+import { KafkaTopic } from '@/services/kafka/kafka.enum';
+import type {
+  MqttCoordinatesPayload,
+  MqttAlertPayload,
+} from './mqtt.interface';
 
 @Injectable()
 export class MqttService implements OnModuleInit, OnModuleDestroy {
@@ -27,7 +19,11 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
 
   constructor(private readonly kafkaService: KafkaService) {}
 
-  onModuleInit() {
+  /**
+   * Initialises the MQTT client, subscribes to all GNSS device topics,
+   * and wires the message dispatcher.
+   */
+  onModuleInit(): void {
     this.client = mqtt.connect({
       host: process.env.MQTT_HOST || 'localhost',
       port: Number(process.env.MQTT_PORT) || 1883,
@@ -38,7 +34,7 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
     });
 
     this.client.on('connect', () => {
-      // Subscribe toàn bộ topic gnss
+      // Subscribe to all GNSS device topics using single-level wildcard
       this.client.subscribe('gnss/+/coordinates');
       this.client.subscribe('gnss/+/alert');
       this.client.subscribe('gnss/+/image');
@@ -57,11 +53,21 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  onModuleDestroy() {
+  /**
+   * Gracefully closes the MQTT connection on module teardown.
+   */
+  onModuleDestroy(): void {
     this.client?.end();
   }
 
-  private async handleMessage(topic: string, payload: Buffer) {
+  /**
+   * Routes incoming MQTT messages to the correct Kafka producer
+   * based on the topic's data-type segment.
+   *
+   * @param topic - Full MQTT topic string, e.g. "gnss/abc123/coordinates"
+   * @param payload - Raw binary payload from the device
+   */
+  private async handleMessage(topic: string, payload: Buffer): Promise<void> {
     const segments = topic.split('/');
     const deviceId = segments[1];
     const dataType = segments[2];
@@ -80,10 +86,19 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async forwardCoordinates(deviceId: string, payload: Buffer) {
+  /**
+   * Parses a GPS coordinate payload and produces it to the GNSS_COORDINATES Kafka topic.
+   *
+   * @param deviceId - Device identifier extracted from the MQTT topic
+   * @param payload  - Raw JSON buffer from the device
+   */
+  private async forwardCoordinates(
+    deviceId: string,
+    payload: Buffer,
+  ): Promise<void> {
     try {
-      const data = JSON.parse(payload.toString()) as CoordinatesPayload;
-      await this.kafkaService.produce('gnss.coordinates', [
+      const data = JSON.parse(payload.toString()) as MqttCoordinatesPayload;
+      await this.kafkaService.produce(KafkaTopic.GNSS_COORDINATES, [
         {
           key: deviceId,
           value: {
@@ -99,14 +114,25 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
       ]);
     } catch (e) {
       const error = e as Error;
-      this.logger.error(`Failed to parse coordinates payload: ${error.message}`);
+      this.logger.error(
+        `Failed to parse coordinates payload: ${error.message}`,
+      );
     }
   }
 
-  private async forwardAlert(deviceId: string, payload: Buffer) {
+  /**
+   * Parses a device alert payload and produces it to the GNSS_ALERTS Kafka topic.
+   *
+   * @param deviceId - Device identifier extracted from the MQTT topic
+   * @param payload  - Raw JSON buffer from the device
+   */
+  private async forwardAlert(
+    deviceId: string,
+    payload: Buffer,
+  ): Promise<void> {
     try {
-      const data = JSON.parse(payload.toString()) as AlertPayload;
-      await this.kafkaService.produce('gnss.alerts', [
+      const data = JSON.parse(payload.toString()) as MqttAlertPayload;
+      await this.kafkaService.produce(KafkaTopic.GNSS_ALERTS, [
         {
           key: deviceId,
           value: {
@@ -125,18 +151,26 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  /**
+   * Encodes raw binary media (image/video) as Base64 and produces it
+   * to the GNSS_MEDIA_UPLOAD Kafka topic for downstream storage processing.
+   *
+   * @param deviceId  - Device identifier extracted from the MQTT topic
+   * @param mediaType - 'image' | 'video'
+   * @param payload   - Raw binary buffer from the device camera
+   */
   private async forwardMedia(
     deviceId: string,
     mediaType: 'image' | 'video',
     payload: Buffer,
-  ) {
-    await this.kafkaService.produce('gnss.media.upload', [
+  ): Promise<void> {
+    await this.kafkaService.produce(KafkaTopic.GNSS_MEDIA_UPLOAD, [
       {
         key: deviceId,
         value: {
           deviceId,
           mediaType,
-          // Encode buffer thành Base64 để truyền qua Kafka
+          // Encode buffer as Base64 for transport over Kafka
           data: payload.toString('base64'),
           mimeType: mediaType === 'image' ? 'image/jpeg' : 'video/mp4',
           timestamp: new Date().toISOString(),

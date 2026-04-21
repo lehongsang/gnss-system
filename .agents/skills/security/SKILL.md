@@ -23,3 +23,4 @@ Strict security standards for the `nest-base` project.
 - `sanitize-request.pipe.ts`
 - `roles.guard.ts`
 - `rate-limit.decorator.ts`
+- [EXCEPTIONS.md](./references/EXCEPTIONS.md) (Custom exceptions, error codes, filter architecture, async logging)

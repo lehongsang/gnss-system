@@ -1,7 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsUUID, IsEnum, IsDateString } from 'class-validator';
 import { GetManyBaseQueryParams } from '@/commons/dtos/get-many-base.dto';
-import { MediaType } from '../entities/media-log.entity';
+import { MediaType } from '@/commons/enums/app.enum';
 
 export class MediaLogQueryDto extends GetManyBaseQueryParams {
   @ApiPropertyOptional()
