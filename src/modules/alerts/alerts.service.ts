@@ -1,6 +1,5 @@
 import {
   Injectable,
-  OnModuleInit,
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
@@ -10,23 +9,22 @@ import { Alert } from './entities/alert.entity';
 import { AlertQueryDto } from './dtos/query-alert.dto';
 import { CreateAlertDto } from './dtos/create-alert.dto';
 import { DevicesService } from '@/modules/devices/devices.service';
-import {
-  GetManyBaseResponseDto,
-  SortOrder,
-} from '@/commons/dtos/get-many-base.dto';
+import { GetManyBaseResponseDto } from '@/commons/dtos/get-many-base.dto';
+import { Device } from '@/modules/devices/entities/device.entity';
 
 @Injectable()
-export class AlertsService implements OnModuleInit {
+export class AlertsService {
   constructor(
     @InjectRepository(Alert)
     private readonly alertRepository: Repository<Alert>,
     private readonly devicesService: DevicesService,
   ) {}
 
-  onModuleInit() {
-    // TODO: Subscribe to 'gnss.alerts' Kafka topic
-  }
-
+  /**
+   * Retrieves a paginated list of alerts.
+   * Non-admin users are restricted to alerts from devices they own,
+   * using an INNER JOIN instead of a separate device query (avoids N+1 anti-pattern).
+   */
   async findAll(
     query: AlertQueryDto,
     requesterId: string,
@@ -43,26 +41,16 @@ export class AlertsService implements OnModuleInit {
     } = query;
     const qb = this.alertRepository.createQueryBuilder('alert');
 
-    // For non-admin, restrict to alerts of devices owned by the requester
+    // For non-admin, use INNER JOIN to filter by device ownership in one query
     if (!isAdmin) {
-      // Find all user's devices
-      const myDevices = await this.devicesService.findMine(requesterId, {
-        page: 1,
-        limit: 1000,
-        sortBy: 'createdAt',
-        sortOrder: SortOrder.DESC,
-      });
-      const myDeviceIds = myDevices.data.map((d) => d.id);
-
-      if (myDeviceIds.length === 0) {
-        return { data: [], total: 0, page, limit, pageCount: 0 };
-      }
-
-      qb.where('alert.deviceId IN (:...myDeviceIds)', { myDeviceIds });
+      qb.innerJoin(
+        Device,
+        'd',
+        'd.id = alert.deviceId AND d.ownerId = :requesterId',
+        { requesterId },
+      );
 
       if (deviceId) {
-        if (!myDeviceIds.includes(deviceId))
-          throw new ForbiddenException('You do not own this device');
         qb.andWhere('alert.deviceId = :deviceId', { deviceId });
       }
     } else {
@@ -84,6 +72,9 @@ export class AlertsService implements OnModuleInit {
     return { data, total, page, limit, pageCount: Math.ceil(total / limit) };
   }
 
+  /**
+   * Retrieves a single alert by ID with ownership check.
+   */
   async findOne(
     id: string,
     requesterId: string,
@@ -106,6 +97,9 @@ export class AlertsService implements OnModuleInit {
     return alert;
   }
 
+  /**
+   * Marks an alert as resolved.
+   */
   async resolve(
     id: string,
     requesterId: string,
@@ -116,6 +110,9 @@ export class AlertsService implements OnModuleInit {
     return this.alertRepository.save(alert);
   }
 
+  /**
+   * Creates a new alert record (used by AlertsConsumer from Kafka pipeline).
+   */
   async create(dto: CreateAlertDto): Promise<Alert> {
     const alert = this.alertRepository.create(dto);
     return this.alertRepository.save(alert);

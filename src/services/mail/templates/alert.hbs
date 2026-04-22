@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #ffffff; }
+        .container { max-width: 500px; margin: 40px auto; padding: 20px; border: 1px solid #eee; border-radius: 8px; }
+        .header { margin-bottom: 30px; text-align: left; }
+        .brand { font-size: 20px; font-weight: bold; color: #1a1a1a; margin-bottom: 5px; }
+        .alert-box { background-color: #fff3cd; padding: 20px; border-radius: 6px; margin: 25px 0; border-left: 4px solid #e6a817; }
+        .alert-title { font-size: 18px; font-weight: 700; color: #856404; margin: 0 0 10px 0; }
+        .alert-body { font-size: 14px; color: #664d03; margin: 0; line-height: 1.5; }
+        .info-text { font-size: 14px; color: #666; margin-top: 20px; }
+        .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; font-size: 13px; color: #666; }
+        .company-name { font-weight: 600; color: #333; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="brand">Astra Solution</div>
+            <div style="color: #666; font-size: 14px;">GNSS Monitoring System</div>
+        </div>
+        
+        <p>Xin chào,</p>
+        <p>Hệ thống <strong>{{appName}}</strong> đã phát hiện một cảnh báo từ thiết bị của bạn:</p>
+        
+        <div class="alert-box">
+            <div class="alert-title">{{title}}</div>
+            <div class="alert-body">{{body}}</div>
+        </div>
+        
+        <p class="info-text">Vui lòng đăng nhập vào hệ thống để xem chi tiết và xử lý cảnh báo này. Nếu bạn không sở hữu thiết bị liên quan, vui lòng bỏ qua email này.</p>
+        
+        <div class="footer">
+            <div class="company-name">Astra Solution Co., Ltd</div>
+            <div>Leading the way in Information Technology</div>
+            <div style="margin-top: 10px;">&copy; {{currentYear}} | All rights reserved.</div>
+        </div>
+    </div>
+</body>
+</html>

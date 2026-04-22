@@ -4,7 +4,6 @@ import {
   ManyToOne,
   JoinColumn,
   Index,
-  UpdateDateColumn,
   DeleteDateColumn,
 } from 'typeorm';
 import { BaseEntity } from '@/commons/entities/base.entity';
@@ -15,6 +14,7 @@ import {
   IsDateString,
   IsEnum,
   IsNotEmpty,
+  IsOptional,
   IsString,
   IsUUID,
 } from 'class-validator';
@@ -53,14 +53,16 @@ export class MediaLog extends BaseEntity {
   mediaType: MediaType;
 
   @ApiProperty({ description: 'S3 object key used to generate presigned URLs' })
-  @Column({ type: 'varchar', nullable: false, name: 'file_url' })
+  @Column({ type: 'varchar', nullable: false, name: 's3_key' })
   @IsNotEmpty()
   @IsString()
-  fileUrl: string;
+  s3Key: string;
 
-  @ApiProperty()
-  @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
+  @ApiPropertyOptional({ description: 'Static file URL (legacy, prefer s3Key + presigned URL)' })
+  @Column({ type: 'varchar', nullable: true, name: 'file_url' })
+  @IsOptional()
+  @IsString()
+  fileUrl: string | null;
 
   @ApiPropertyOptional()
   @DeleteDateColumn({ name: 'deleted_at' })

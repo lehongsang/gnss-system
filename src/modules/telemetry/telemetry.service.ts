@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Telemetry } from './entities/telemetry.entity';
@@ -13,30 +13,36 @@ import type { CoordinatePayload } from '@/commons/interfaces/app.interface';
 
 
 @Injectable()
-export class TelemetryService implements OnModuleInit {
+export class TelemetryService {
   constructor(
     @InjectRepository(Telemetry)
     private readonly telemetryRepository: Repository<Telemetry>,
     private readonly devicesService: DevicesService,
   ) {}
 
-  onModuleInit() {
-    // TODO: Subscribe to Kafka
-  }
 
+  /**
+   * Persists a single GPS coordinate point for a device.
+   * After inserting the row, updates the PostGIS `geom` column via raw SQL
+   * since TypeORM cannot natively serialize geometry types.
+   */
   async savePoint(deviceId: string, payload: CoordinatePayload): Promise<void> {
+    // Step 1: Create the telemetry record with all fields
     const telemetry = this.telemetryRepository.create({
       deviceId,
       lat: payload.lat,
       lng: payload.lng,
+      speed: payload.speed,
+      heading: payload.heading,
+      altitude: payload.altitude,
       timestamp: payload.timestamp,
       accuracyStatus: payload.accuracyStatus,
     });
 
-    // Geom insertion requires raw query or custom approach in TypeORM.
-    // This is a placeholder for `geom` handling depending on exact integration.
-
+    // Step 2: Persist the record
     await this.telemetryRepository.save(telemetry);
+
+    // Step 3: Update PostGIS geometry column via raw SQL
     await this.telemetryRepository.query(
       `
       UPDATE telemetry SET geom = ST_SetSRID(ST_MakePoint($1, $2), 4326) WHERE id = $3

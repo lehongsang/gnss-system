@@ -65,9 +65,10 @@ export class DevicesController {
   }
 
   @Delete(':id')
-  @Roles([Role.ADMIN])
-  @Doc({ summary: 'Role: Admin - Delete device' })
-  remove(@Param('id') id: string) {
-    return this.devicesService.remove(id);
+  @Roles(ALL_ROLES)
+  @Doc({ summary: 'Role: All - Delete device (ownership validated)' })
+  remove(@Param('id') id: string, @Session() user: User) {
+    const isAdmin = user.role === Role.ADMIN;
+    return this.devicesService.remove(id, user.id, isAdmin);
   }
 }

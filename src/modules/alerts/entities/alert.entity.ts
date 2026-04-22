@@ -4,7 +4,6 @@ import {
   ManyToOne,
   JoinColumn,
   Index,
-  UpdateDateColumn,
   DeleteDateColumn,
 } from 'typeorm';
 import { BaseEntity } from '@/commons/entities/base.entity';
@@ -68,21 +67,16 @@ export class Alert extends BaseEntity {
   @IsLongitude()
   lng: number;
 
-  @ApiProperty({ description: 'URL to a snapshot taken at the time of alert' })
-  @Column({ type: 'varchar', nullable: false, name: 'snapshot_url' })
-  @IsNotEmpty()
+  @ApiPropertyOptional({ description: 'URL to a snapshot taken at the time of alert' })
+  @Column({ type: 'varchar', nullable: true, name: 'snapshot_url' })
   @IsUrl()
-  snapshotUrl: string;
+  snapshotUrl: string | null;
 
   @ApiProperty({ description: 'Whether the alert has been acknowledged / resolved' })
   @Column({ type: 'boolean', default: false, name: 'is_resolved' })
   @IsNotEmpty()
   @IsBoolean()
   isResolved: boolean;
-
-  @ApiProperty()
-  @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
 
   @ApiPropertyOptional()
   @DeleteDateColumn({ name: 'deleted_at' })

@@ -5,6 +5,7 @@ import { ConfigModule } from '@nestjs/config';
 import { DatabaseModule } from './database/database.module';
 import { CombineModule } from './modules/combine.module';
 import { ServicesModule } from './services/services.module';
+import { GnssGatewayModule } from './gateways/gnss-gateway.module';
 import databaseConfig from './database/database.config';
 import { LoggerModule } from './commons/logger/logger.module';
 import { CustomRateLimitGuard } from './commons/guards/rate-limit.guard';
@@ -26,6 +27,7 @@ import {
     DatabaseModule,
     ServicesModule,
     CombineModule,
+    GnssGatewayModule,
   ],
   providers: [
     {

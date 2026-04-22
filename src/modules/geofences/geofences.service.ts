@@ -90,9 +90,7 @@ export class GeofencesService {
       [id],
     );
     if (raw && raw[0]?.geom) {
-      (geofence as Geofence & { geom: unknown }).geom = JSON.parse(
-        raw[0].geom,
-      ) as unknown;
+      (geofence as Geofence & { geom: string }).geom = raw[0].geom;
     }
 
     return geofence;

@@ -76,4 +76,42 @@ export class MailService {
       return false;
     }
   }
+
+  /**
+   * Sends a device alert notification email to the device owner.
+   * Used by AlertsConsumer to notify users about critical device events
+   * such as geofence exits, signal loss, or dangerous obstacles.
+   *
+   * @param email - Recipient email address (device owner)
+   * @param title - Alert title (e.g., "⚠️ Thiết bị thoát khỏi vùng địa lý")
+   * @param body - Detailed alert description
+   * @returns true if email was sent successfully, false otherwise
+   */
+  async sendAlertEmail(
+    email: string,
+    title: string,
+    body: string,
+  ): Promise<boolean> {
+    try {
+      await this.mailerService.sendMail({
+        to: email,
+        subject: `[GNSS Alert] ${title}`,
+        template: './alert',
+        context: {
+          title,
+          body,
+          currentYear: new Date().getFullYear(),
+          appName: this.configService.get<string>('APP_NAME', 'GNSS System'),
+        },
+      });
+      this.logger.log(`Alert email sent to ${email}: ${title}`);
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        `Failed to send alert email to ${email}: ${message}`,
+      );
+      return false;
+    }
+  }
 }

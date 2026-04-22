@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsNotEmpty,
   IsString,
@@ -6,6 +6,7 @@ import {
   IsLatitude,
   IsLongitude,
   IsUrl,
+  IsOptional,
   IsEnum,
   MaxLength,
 } from 'class-validator';
@@ -38,8 +39,8 @@ export class CreateAlertDto {
   @IsLongitude()
   lng: number;
 
-  @ApiProperty({ description: 'URL to a snapshot taken at the time of the alert' })
-  @IsNotEmpty()
+  @ApiPropertyOptional({ description: 'URL to a snapshot taken at the time of the alert' })
+  @IsOptional()
   @IsUrl()
-  snapshotUrl: string;
+  snapshotUrl?: string;
 }

@@ -3,7 +3,6 @@ import {
   Column,
   ManyToOne,
   JoinColumn,
-  UpdateDateColumn,
   DeleteDateColumn,
 } from 'typeorm';
 import { BaseEntity } from '@/commons/entities/base.entity';
@@ -11,11 +10,14 @@ import { User } from '@/modules/auth/entities/user.entity';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
   Matches,
+  Max,
   MaxLength,
+  Min,
 } from 'class-validator';
 
 @Entity('devices')
@@ -51,9 +53,16 @@ export class Device extends BaseEntity {
   @JoinColumn({ name: 'owner_id' })
   owner: User;
 
-  @ApiProperty()
-  @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
+  @ApiPropertyOptional({
+    example: 80,
+    description: 'Ngưỡng tốc độ tối đa (km/h). null = không giám sát tốc độ.',
+  })
+  @Column({ type: 'float', nullable: true, name: 'speed_limit_kmh' })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(300)
+  speedLimitKmh: number | null;
 
   @ApiPropertyOptional()
   @DeleteDateColumn({ name: 'deleted_at' })

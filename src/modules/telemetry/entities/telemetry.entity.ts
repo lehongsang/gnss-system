@@ -5,7 +5,6 @@ import {
   JoinColumn,
   Index,
   DeleteDateColumn,
-  UpdateDateColumn,
 } from 'typeorm';
 import { BaseEntity } from '@/commons/entities/base.entity';
 import { Device } from '@/modules/devices/entities/device.entity';
@@ -87,10 +86,6 @@ export class Telemetry extends BaseEntity {
   @IsNotEmpty()
   @IsEnum(AccuracyStatus)
   accuracyStatus: AccuracyStatus;
-
-  @ApiProperty()
-  @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
 
   @ApiPropertyOptional()
   @DeleteDateColumn({ name: 'deleted_at' })

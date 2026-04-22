@@ -5,7 +5,6 @@ import {
   JoinColumn,
   ManyToMany,
   JoinTable,
-  UpdateDateColumn,
   DeleteDateColumn,
 } from 'typeorm';
 import { BaseEntity } from '@/commons/entities/base.entity';
@@ -39,6 +38,25 @@ export class Geofence extends BaseEntity {
   @JoinColumn({ name: 'created_by' })
   creator: User;
 
+  /**
+   * PostGIS geometry column storing the geofence polygon boundary.
+   *
+   * TypeORM does not natively support PostGIS geometry types, so this column
+   * is declared as 'geometry' with explicit `spatialFeatureType` and `srid`.
+   * TypeORM `synchronize` will create this column as `geometry(Geometry,4326)`.
+   *
+   * All reads/writes use raw SQL with ST_GeomFromGeoJSON / ST_AsGeoJSON
+   * because TypeORM cannot serialize/deserialize PostGIS geometries automatically.
+   */
+  @Column({
+    type: 'geometry',
+    spatialFeatureType: 'Polygon',
+    srid: 4326,
+    nullable: true,
+    select: false, // Excluded from default SELECT; use ST_AsGeoJSON() in raw queries
+  })
+  geom: string;
+
   @ManyToMany(() => Device)
   @JoinTable({
     name: 'device_geofence',
@@ -46,10 +64,6 @@ export class Geofence extends BaseEntity {
     inverseJoinColumn: { name: 'device_id', referencedColumnName: 'id' },
   })
   devices: Device[];
-
-  @ApiProperty()
-  @UpdateDateColumn({ name: 'updated_at' })
-  updatedAt: Date;
 
   @ApiPropertyOptional()
   @DeleteDateColumn({ name: 'deleted_at' })

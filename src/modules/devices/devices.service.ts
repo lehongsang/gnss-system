@@ -114,9 +114,17 @@ export class DevicesService {
     return this.deviceRepository.save(device);
   }
 
-  async remove(id: string): Promise<DefaultMessageResponseDto> {
-    const device = await this.deviceRepository.findOneBy({ id });
-    if (!device) throw new NotFoundException('Device not found');
+  /**
+   * Deletes a device by ID.
+   * Uses findOne() internally to ensure the device exists and the requester
+   * has ownership (non-admin) before proceeding with deletion.
+   */
+  async remove(
+    id: string,
+    requesterId: string,
+    isAdmin: boolean,
+  ): Promise<DefaultMessageResponseDto> {
+    const device = await this.findOne(id, requesterId, isAdmin);
     await this.deviceRepository.remove(device);
     return { message: 'Device deleted successfully' };
   }

@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { BeforeInsert, Column, PrimaryColumn } from 'typeorm';
+import { BeforeInsert, Column, PrimaryColumn, UpdateDateColumn } from 'typeorm';
 import { v7 as uuidv7 } from 'uuid';
 
 export class BaseEntity {
@@ -14,8 +14,11 @@ export class BaseEntity {
     }
   }
 
-  @ApiProperty()
+ @ApiProperty()
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   createdAt: Date;
 
+  @ApiProperty()
+  @UpdateDateColumn()
+  updatedAt: Date;
 }

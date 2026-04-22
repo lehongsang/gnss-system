@@ -1,6 +1,5 @@
 import {
   Injectable,
-  OnModuleInit,
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
@@ -9,21 +8,24 @@ import { Repository } from 'typeorm';
 import { MediaLog } from './entities/media-log.entity';
 import { MediaLogQueryDto } from './dtos/query-media-log.dto';
 import { DevicesService } from '@/modules/devices/devices.service';
-import {
-  GetManyBaseResponseDto,
-  SortOrder,
-} from '@/commons/dtos/get-many-base.dto';
+import { StorageService } from '@/services/storage/storage.service';
+import { GetManyBaseResponseDto } from '@/commons/dtos/get-many-base.dto';
+import { Device } from '@/modules/devices/entities/device.entity';
 
 @Injectable()
-export class MediaLogsService implements OnModuleInit {
+export class MediaLogsService {
   constructor(
     @InjectRepository(MediaLog)
     private readonly mediaLogRepository: Repository<MediaLog>,
     private readonly devicesService: DevicesService,
+    private readonly storageService: StorageService,
   ) {}
 
-  async onModuleInit() {}
-
+  /**
+   * Retrieves a paginated list of media logs.
+   * Non-admin users are restricted to logs from devices they own,
+   * using an INNER JOIN instead of a separate device query (avoids N+1 anti-pattern).
+   */
   async findAll(
     query: MediaLogQueryDto,
     requesterId: string,
@@ -41,25 +43,16 @@ export class MediaLogsService implements OnModuleInit {
     } = query;
     const qb = this.mediaLogRepository.createQueryBuilder('mediaLog');
 
-    // For non-admin, restrict to logs of devices owned by the requester
+    // For non-admin, use INNER JOIN to filter by device ownership in one query
     if (!isAdmin) {
-      const myDevices = await this.devicesService.findMine(requesterId, {
-        page: 1,
-        limit: 1000,
-        sortBy: 'createdAt',
-        sortOrder: SortOrder.DESC,
-      });
-      const myDeviceIds = myDevices.data.map((d) => d.id);
-
-      if (myDeviceIds.length === 0) {
-        return { data: [], total: 0, page, limit, pageCount: 0 };
-      }
-
-      qb.where('mediaLog.deviceId IN (:...myDeviceIds)', { myDeviceIds });
+      qb.innerJoin(
+        Device,
+        'd',
+        'd.id = mediaLog.deviceId AND d.ownerId = :requesterId',
+        { requesterId },
+      );
 
       if (deviceId) {
-        if (!myDeviceIds.includes(deviceId))
-          throw new ForbiddenException('You do not own this device');
         qb.andWhere('mediaLog.deviceId = :deviceId', { deviceId });
       }
     } else {
@@ -82,6 +75,9 @@ export class MediaLogsService implements OnModuleInit {
     return { data, total, page, limit, pageCount: Math.ceil(total / limit) };
   }
 
+  /**
+   * Retrieves a single media log by ID with ownership check.
+   */
   async findOne(
     id: string,
     requesterId: string,
@@ -104,18 +100,35 @@ export class MediaLogsService implements OnModuleInit {
     return log;
   }
 
+  /**
+   * Generates a short-lived presigned URL for secure media streaming/download.
+   * Uses the s3Key stored on the MediaLog record to generate a time-limited GET URL
+   * via StorageService, instead of returning a static (inaccessible) file URL.
+   */
   async getStreamUrl(
     id: string,
     requesterId: string,
     isAdmin: boolean,
   ): Promise<{ url: string }> {
     const log = await this.findOne(id, requesterId, isAdmin);
-    // Placeholder. In reality, generate presigned URL from StorageService or S3 client
-    return { url: log.fileUrl };
+
+    // Generate a presigned GET URL valid for 1 hour (3600s)
+    const presignedUrl = await this.storageService.getPresignedUrl(log.s3Key);
+    if (!presignedUrl) {
+      throw new NotFoundException(
+        'Unable to generate stream URL — media file may have been deleted from storage',
+      );
+    }
+
+    return { url: presignedUrl };
   }
 
+  /**
+   * Creates a new media log record.
+   */
   async create(data: Partial<MediaLog>): Promise<MediaLog> {
     const log = this.mediaLogRepository.create(data);
     return this.mediaLogRepository.save(log);
   }
 }
+
