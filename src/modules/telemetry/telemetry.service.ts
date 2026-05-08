@@ -38,9 +38,10 @@ export class TelemetryService implements OnModuleInit {
     `);
 
     // Backfill geom from lat/lng for rows that lost geometry data after synchronize
-    const [, count] = await this.dataSource.query(
+    const backfillResult: [unknown, number] = await this.dataSource.query(
       `UPDATE telemetry SET geom = ST_SetSRID(ST_MakePoint(lng, lat), 4326) WHERE geom IS NULL`,
     );
+    const count = backfillResult[1];
     if (count > 0) {
       this.logger.log(`Backfilled geom for ${count} telemetry rows`);
     }
