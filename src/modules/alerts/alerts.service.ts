@@ -54,6 +54,10 @@ export class AlertsService {
         qb.andWhere('alert.deviceId = :deviceId', { deviceId });
       }
     } else {
+      // Admin: include device + owner relations for resource management
+      qb.leftJoinAndSelect('alert.device', 'device')
+        .leftJoinAndSelect('device.owner', 'owner');
+
       if (deviceId) {
         qb.where('alert.deviceId = :deviceId', { deviceId });
       }

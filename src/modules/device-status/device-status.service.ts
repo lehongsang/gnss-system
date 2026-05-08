@@ -46,6 +46,14 @@ export class DeviceStatusService {
     return status;
   }
 
+  /**
+   * Returns all device-status records.
+   * Used by admin pages that need to display status for every device at once.
+   */
+  async findAll(): Promise<DeviceStatus[]> {
+    return this.deviceStatusRepository.find();
+  }
+
   async upsert(
     deviceId: string,
     dto: UpdateDeviceStatusDto,

@@ -70,12 +70,6 @@ export class Telemetry extends BaseEntity {
   @Max(360)
   heading: number;
 
-  @ApiProperty({ description: 'Altitude in metres above sea level' })
-  @Column({ type: 'float', nullable: false })
-  @IsNotEmpty()
-  @IsNumber()
-  altitude: number;
-
   @ApiProperty({ enum: AccuracyStatus, description: 'Sensor fusion mode' })
   @Column({
     type: 'enum',

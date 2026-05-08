@@ -1,24 +1,42 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsDateString, MaxLength } from 'class-validator';
+import { ApiProperty, PickType } from '@nestjs/swagger';
+import { IsEmail, IsNotEmpty, IsString, MaxLength, MinLength } from 'class-validator';
+import { User } from '../../auth/entities/user.entity';
 
-/**
- * DTO for updating the authenticated user's own profile.
- */
-export class UpdateProfileDto {
-  @ApiPropertyOptional({ description: 'Full display name', maxLength: 255 })
-  @IsOptional()
-  @IsString()
+export class UserRegisterDto extends PickType(User, [] as const) {
+  @ApiProperty({ description: 'User email', example: 'user@test.com' })
+  @IsEmail()
+  @IsNotEmpty()
   @MaxLength(255)
-  name?: string;
+  email: string;
 
-  @ApiPropertyOptional({ description: 'Phone number in any format', maxLength: 20 })
-  @IsOptional()
+  @ApiProperty({ description: 'User full name', example: 'John Doe' })
   @IsString()
-  @MaxLength(20)
-  phone?: string;
+  @IsNotEmpty()
+  @MaxLength(200)
+  name: string;
 
-  @ApiPropertyOptional({ description: 'Date of birth in ISO 8601 format', example: '1995-06-15' })
-  @IsOptional()
-  @IsDateString()
-  dateOfBirth?: string;
+  @ApiProperty({ description: 'User password', minLength: 8 })
+  @IsString()
+  @MinLength(8)
+  @IsNotEmpty()
+  password: string;
+}
+
+export class UserResendOtpDto extends PickType(User, [] as const) {
+  @ApiProperty({ description: 'User email', example: 'user@test.com' })
+  @IsEmail()
+  @IsNotEmpty()
+  email: string;
+}
+
+export class UserVerifyOtpDto extends PickType(User, [] as const) {
+  @ApiProperty({ description: 'User email', example: 'user@test.com' })
+  @IsEmail()
+  @IsNotEmpty()
+  email: string;
+
+  @ApiProperty({ description: 'OTP code', example: '123456' })
+  @IsString()
+  @IsNotEmpty()
+  otp: string;
 }

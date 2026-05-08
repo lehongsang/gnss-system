@@ -11,8 +11,6 @@ export interface MqttCoordinatesPayload {
   speed: number;
   /** Compass heading in degrees (0–360) */
   heading: number;
-  /** Altitude in meters above sea level */
-  altitude: number;
   /** ISO 8601 UTC timestamp string */
   timestamp: string;
 }

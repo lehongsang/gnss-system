@@ -1,5 +1,5 @@
 import { BaseEntity } from '@/commons/entities/base.entity';
-import { Role } from '@/commons/enums/app.enum';
+import { Role, UserStatus } from '@/commons/enums/app.enum';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Column, Entity, OneToMany } from 'typeorm';
 import { Account } from './account.entity';
@@ -99,4 +99,16 @@ export class User extends BaseEntity {
   @IsBoolean()
   @IsOptional()
   twoFactorEnabled?: boolean;
+
+  @ApiPropertyOptional({ enum: UserStatus, enumName: 'UserStatus' })
+  @IsEnum(UserStatus)
+  @IsOptional()
+  @Column({ type: 'enum', enum: UserStatus, default: UserStatus.PENDING })
+  status: UserStatus;
+
+  @ApiPropertyOptional({ description: 'Whether the user has completed KYC verification' })
+  @IsBoolean()
+  @IsOptional()
+  @Column({ type: 'boolean', nullable: true, default: false })
+  isVerifiedKyc?: boolean;
 }

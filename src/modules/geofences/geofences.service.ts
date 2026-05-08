@@ -15,6 +15,44 @@ import {
 } from '@/commons/dtos/get-many-base.dto';
 import { DefaultMessageResponseDto } from '@/commons/dtos/default-message-response.dto';
 
+export interface GeoJSONPolygon {
+  type: string;
+  coordinates: [number, number][][];
+}
+
+export interface EnrichedGeofence extends Omit<Geofence, 'geom' | 'devices'> {
+  geom: GeoJSONPolygon | null;
+  paths: { lat: number; lng: number }[];
+  vertexCount: number;
+  Devices: string[];
+}
+
+const parseGeom = (geomStr: string | null): { parsedGeom: GeoJSONPolygon | null, paths: { lat: number; lng: number }[], vertexCount: number } => {
+  let parsedGeom: GeoJSONPolygon | null = null;
+  let paths: { lat: number; lng: number }[] = [];
+  
+  if (geomStr) {
+    try {
+      const geojson = JSON.parse(geomStr) as GeoJSONPolygon;
+      parsedGeom = geojson;
+      if (geojson.type === 'Polygon' && geojson.coordinates && geojson.coordinates[0]) {
+        paths = geojson.coordinates[0].map((coord: [number, number]) => ({
+          lng: coord[0],
+          lat: coord[1],
+        }));
+      }
+    } catch {
+      parsedGeom = null;
+    }
+  }
+  
+  return {
+    parsedGeom,
+    paths,
+    vertexCount: paths.length > 0 ? paths.length - 1 : 0,
+  };
+};
+
 @Injectable()
 export class GeofencesService {
   constructor(
@@ -27,7 +65,7 @@ export class GeofencesService {
     query: GetManyBaseQueryParams,
     requesterId: string,
     isAdmin: boolean,
-  ): Promise<GetManyBaseResponseDto<Geofence>> {
+  ): Promise<GetManyBaseResponseDto<EnrichedGeofence>> {
     const {
       page = 1,
       limit = 10,
@@ -38,15 +76,7 @@ export class GeofencesService {
     const qb = this.geofenceRepository
       .createQueryBuilder('geofence')
       .leftJoinAndSelect('geofence.devices', 'devices')
-      .select([
-        'geofence.id',
-        'geofence.name',
-        'geofence.createdBy',
-        'geofence.createdAt',
-        'geofence.updatedAt',
-        'ST_AsGeoJSON(geofence.geom) as geom',
-        'devices',
-      ]);
+      .addSelect('ST_AsGeoJSON(geofence.geom)', 'geofence_geom');
 
     if (!isAdmin) {
       qb.where('geofence.createdBy = :requesterId', { requesterId });
@@ -56,13 +86,29 @@ export class GeofencesService {
       qb.andWhere('geofence.name ILIKE :search', { search: `%${search}%` });
     }
 
-    // Using query raw mapping to parse GeoJSON appropriately might be needed here.
-    // This is simplified standard execution.
-    const [data, total] = await qb
+    const { entities, raw } = await qb
       .orderBy(`geofence.${sortBy}`, sortOrder)
       .skip((page - 1) * limit)
       .take(limit)
-      .getManyAndCount();
+      .getRawAndEntities();
+
+    const data: EnrichedGeofence[] = entities.map((entity) => {
+      const typedRaw = raw as { geofence_id: string; geofence_geom: string | null }[];
+      const rawRow = typedRaw.find((r) => r.geofence_id === entity.id);
+      const geomStr = rawRow?.geofence_geom || null;
+      
+      const { parsedGeom, paths, vertexCount } = parseGeom(geomStr);
+
+      return {
+        ...entity,
+        geom: parsedGeom,
+        paths,
+        vertexCount,
+        Devices: entity.devices?.map((d) => d.id) || [],
+      } as unknown as EnrichedGeofence;
+    });
+
+    const total = await qb.getCount();
 
     return { data, total, page, limit, pageCount: Math.ceil(total / limit) };
   }
@@ -71,7 +117,7 @@ export class GeofencesService {
     id: string,
     requesterId: string,
     isAdmin: boolean,
-  ): Promise<Geofence> {
+  ): Promise<EnrichedGeofence> {
     const geofence = await this.geofenceRepository.findOne({
       where: { id },
       relations: ['devices'],
@@ -89,16 +135,24 @@ export class GeofencesService {
       `SELECT ST_AsGeoJSON(geom) as geom FROM geofences WHERE id = $1`,
       [id],
     );
-    if (raw && raw[0]?.geom) {
-      (geofence as Geofence & { geom: string }).geom = raw[0].geom;
-    }
+    const geomStr = raw && raw[0]?.geom ? raw[0].geom : null;
+    const { parsedGeom, paths, vertexCount } = parseGeom(geomStr);
 
-    return geofence;
+    const enrichedGeofence = {
+      ...geofence,
+      geom: parsedGeom,
+      paths,
+      vertexCount,
+      Devices: geofence.devices?.map((d) => d.id) || [],
+    } as unknown as EnrichedGeofence;
+
+    return enrichedGeofence;
   }
 
-  async create(dto: CreateGeofenceDto, userId: string): Promise<Geofence> {
+  async create(dto: CreateGeofenceDto, userId: string): Promise<EnrichedGeofence> {
     const geofence = this.geofenceRepository.create({
       name: dto.name,
+      color: dto.color,
       createdBy: userId,
     });
     const saved = await this.geofenceRepository.save(geofence);
@@ -119,11 +173,24 @@ export class GeofencesService {
     dto: UpdateGeofenceDto,
     requesterId: string,
     isAdmin: boolean,
-  ): Promise<Geofence> {
-    const geofence = await this.findOne(id, requesterId, isAdmin);
+  ): Promise<EnrichedGeofence> {
+    const geofence = await this.geofenceRepository.findOne({ where: { id } });
+    if (!geofence) throw new NotFoundException('Geofence not found');
+    if (!isAdmin && geofence.createdBy !== requesterId) {
+      throw new ForbiddenException('You do not have permission to access this geofence');
+    }
 
-    if (dto.name) {
+    let isUpdated = false;
+    if (dto.name !== undefined) {
       geofence.name = dto.name;
+      isUpdated = true;
+    }
+    if (dto.color !== undefined) {
+      geofence.color = dto.color;
+      isUpdated = true;
+    }
+
+    if (isUpdated) {
       await this.geofenceRepository.save(geofence);
     }
 
@@ -144,7 +211,13 @@ export class GeofencesService {
     requesterId: string,
     isAdmin: boolean,
   ): Promise<DefaultMessageResponseDto> {
-    const geofence = await this.findOne(id, requesterId, isAdmin);
+    const geofence = await this.geofenceRepository.findOne({ where: { id } });
+    if (!geofence) throw new NotFoundException('Geofence not found');
+
+    if (!isAdmin && geofence.createdBy !== requesterId) {
+      throw new ForbiddenException('You do not have permission to access this geofence');
+    }
+
     await this.geofenceRepository.remove(geofence);
     return { message: 'Geofence deleted successfully' };
   }

@@ -107,7 +107,6 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
             lat: data.lat,
             speed: data.speed,
             heading: data.heading,
-            altitude: data.altitude,
             timestamp: data.timestamp,
           },
         },

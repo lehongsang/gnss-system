@@ -22,14 +22,14 @@ export class AlertsController {
   @Get('mine')
   @Roles(ALL_ROLES)
   @Doc({ summary: 'Role: All - Get alerts for my devices' })
-  findMine(@Session() user: User, @Query() query: AlertQueryDto) {
+  findMine(@Session() { user }: { user: User }, @Query() query: AlertQueryDto) {
     return this.alertsService.findAll(query, user.id, false);
   }
 
   @Get(':id')
   @Roles(ALL_ROLES)
   @Doc({ summary: 'Role: All - Get alert by id' })
-  findOne(@Param('id') id: string, @Session() user: User) {
+  findOne(@Param('id') id: string, @Session() { user }: { user: User }) {
     const isAdmin = user.role === Role.ADMIN;
     return this.alertsService.findOne(id, user.id, isAdmin);
   }
@@ -37,7 +37,7 @@ export class AlertsController {
   @Patch(':id/resolve')
   @Roles(ALL_ROLES)
   @Doc({ summary: 'Role: All - Resolve alert' })
-  resolve(@Param('id') id: string, @Session() user: User) {
+  resolve(@Param('id') id: string, @Session() { user }: { user: User }) {
     const isAdmin = user.role === Role.ADMIN;
     return this.alertsService.resolve(id, user.id, isAdmin);
   }

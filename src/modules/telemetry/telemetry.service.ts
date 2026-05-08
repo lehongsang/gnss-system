@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { Telemetry } from './entities/telemetry.entity';
 import {
   TelemetryHistoryQueryDto,
@@ -9,16 +9,44 @@ import {
 import { DevicesService } from '@/modules/devices/devices.service';
 import { GetManyBaseResponseDto } from '@/commons/dtos/get-many-base.dto';
 import type { CoordinatePayload } from '@/commons/interfaces/app.interface';
+import { LoggerService } from '@/commons/logger/logger.service';
 
 
 
 @Injectable()
-export class TelemetryService {
+export class TelemetryService implements OnModuleInit {
+  private readonly logger = new LoggerService(TelemetryService.name);
+
   constructor(
     @InjectRepository(Telemetry)
     private readonly telemetryRepository: Repository<Telemetry>,
     private readonly devicesService: DevicesService,
+    private readonly dataSource: DataSource,
   ) {}
+
+  /**
+   * Ensures PostGIS geometry columns and spatial indexes exist on startup.
+   * TypeORM `synchronize` drops geometry columns it cannot manage natively,
+   * so we recreate them every time the application boots.
+   */
+  async onModuleInit(): Promise<void> {
+    await this.dataSource.query(`
+      ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS geom geometry(Point, 4326);
+      CREATE INDEX IF NOT EXISTS idx_telemetry_geom ON telemetry USING GIST (geom);
+      ALTER TABLE geofences ADD COLUMN IF NOT EXISTS geom geometry(Polygon, 4326);
+      CREATE INDEX IF NOT EXISTS idx_geofences_geom ON geofences USING GIST (geom);
+    `);
+
+    // Backfill geom from lat/lng for rows that lost geometry data after synchronize
+    const [, count] = await this.dataSource.query(
+      `UPDATE telemetry SET geom = ST_SetSRID(ST_MakePoint(lng, lat), 4326) WHERE geom IS NULL`,
+    );
+    if (count > 0) {
+      this.logger.log(`Backfilled geom for ${count} telemetry rows`);
+    }
+
+    this.logger.log('PostGIS geometry columns ensured on telemetry & geofences');
+  }
 
 
   /**
@@ -34,7 +62,6 @@ export class TelemetryService {
       lng: payload.lng,
       speed: payload.speed,
       heading: payload.heading,
-      altitude: payload.altitude,
       timestamp: payload.timestamp,
       accuracyStatus: payload.accuracyStatus,
     });
@@ -97,6 +124,18 @@ export class TelemetryService {
     if (!latest)
       throw new NotFoundException('No telemetry data found for this device');
     return latest;
+  }
+
+  /**
+   * Returns the latest telemetry point for EVERY device in a single query.
+   * Uses PostgreSQL DISTINCT ON to efficiently pick the newest row per device_id.
+   */
+  async findLatestAll(): Promise<Telemetry[]> {
+    return this.telemetryRepository.query(`
+      SELECT DISTINCT ON (device_id) *
+      FROM telemetry
+      ORDER BY device_id, timestamp DESC
+    `);
   }
 
   async findNearby(query: NearbyQueryDto): Promise<Telemetry[]> {

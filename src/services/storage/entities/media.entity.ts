@@ -56,6 +56,12 @@ export class Media extends BaseEntity {
   status: MediaStatus;
 
   @ApiPropertyOptional()
+  @Column({ type: 'uuid', name: 'created_by', nullable: true })
+  @IsOptional()
+  @IsString()
+  createdBy: string | null;
+
+  @ApiPropertyOptional()
   @DeleteDateColumn({ name: 'deleted_at' })
   deletedAt: Date | null;
 }

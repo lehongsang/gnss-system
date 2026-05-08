@@ -18,7 +18,7 @@ export enum KafkaTopic {
   STORAGE_DELETE = 'storage.delete',
 
   // ─── GNSS ──────────────────────────────────────────────────────────────────
-  /** Realtime GPS coordinates bridged from MQTT: { deviceId, lng, lat, speed, heading, altitude, timestamp } */
+  /** Realtime GPS coordinates bridged from MQTT: { deviceId, lng, lat, speed, heading, timestamp } */
   GNSS_COORDINATES = 'gnss.coordinates',
   /** Device alerts bridged from MQTT: { deviceId, type, severity, message, location, timestamp } */
   GNSS_ALERTS = 'gnss.alerts',

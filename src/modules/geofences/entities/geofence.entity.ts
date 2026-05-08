@@ -28,6 +28,12 @@ export class Geofence extends BaseEntity {
   @MaxLength(255)
   name: string;
 
+  @ApiPropertyOptional({ description: 'Hex color code, e.g. #3b82f6' })
+  @Column({ type: 'varchar', nullable: true, default: '#3b82f6' })
+  @IsOptional()
+  @IsString()
+  color: string;
+
   @ApiPropertyOptional({ description: 'UUID of the user who created this geofence' })
   @Column({ type: 'uuid', name: 'created_by', nullable: true })
   @IsOptional()

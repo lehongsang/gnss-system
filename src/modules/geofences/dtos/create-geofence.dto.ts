@@ -1,7 +1,8 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsNotEmpty,
   IsObject,
+  IsOptional,
   IsString,
   IsUUID,
   MaxLength,
@@ -13,6 +14,11 @@ export class CreateGeofenceDto {
   @IsNotEmpty()
   @MaxLength(255)
   name: string;
+
+  @ApiPropertyOptional({ example: '#3b82f6' })
+  @IsOptional()
+  @IsString()
+  color?: string;
 
   @ApiProperty({
     description: 'GeoJSON Polygon coordinates',

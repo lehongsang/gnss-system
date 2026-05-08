@@ -8,12 +8,15 @@ import { TelemetryModule } from './telemetry/telemetry.module';
 import { GeofencesModule } from './geofences/geofences.module';
 import { AlertsModule } from './alerts/alerts.module';
 import { MediaLogsModule } from './media-logs/media-logs.module';
+import { StatisticsModule } from './statistics/statistics.module';
+import { DeviceGroupsModule } from './device-groups/device-groups.module';
 
 @Module({
   imports: [
     AuthModule, RootModule, UsersModule,
     DevicesModule, DeviceStatusModule, TelemetryModule,
     GeofencesModule, AlertsModule, MediaLogsModule,
+    StatisticsModule, DeviceGroupsModule,
   ],
 })
 export class CombineModule {}

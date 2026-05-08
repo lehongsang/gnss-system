@@ -9,6 +9,20 @@ export enum Role {
 }
 export const ALL_ROLES = [Role.USER, Role.ADMIN];
 
+// ─── User Status ───────────────────────────────────────────────────────────────
+
+/**
+ * Enum representing the account status of a user.
+ */
+export enum UserStatus {
+  /** User has registered but not yet verified */
+  PENDING = 'pending',
+  /** User account is active and verified */
+  ACTIVE = 'active',
+  /** User account has been deactivated */
+  INACTIVE = 'inactive',
+}
+
 // ─── Alerts ────────────────────────────────────────────────────────────────────
 
 /**

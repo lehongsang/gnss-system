@@ -33,14 +33,14 @@ export class DevicesController {
   @Get('mine')
   @Roles(ALL_ROLES)
   @Doc({ summary: 'Role: All - Get my devices' })
-  findMine(@Session() user: User, @Query() query: GetManyBaseQueryParams) {
+  findMine(@Session() { user }: { user: User }, @Query() query: GetManyBaseQueryParams) {
     return this.devicesService.findMine(user.id, query);
   }
 
   @Get(':id')
   @Roles(ALL_ROLES)
   @Doc({ summary: 'Role: All - Get device by id' })
-  findOne(@Param('id') id: string, @Session() user: User) {
+  findOne(@Param('id') id: string, @Session() { user }: { user: User }) {
     const isAdmin = user.role === Role.ADMIN;
     return this.devicesService.findOne(id, user.id, isAdmin);
   }
@@ -48,7 +48,7 @@ export class DevicesController {
   @Post()
   @Roles(ALL_ROLES)
   @Doc({ summary: 'Role: All - Create new device' })
-  create(@Body() dto: CreateDeviceDto, @Session() user: User) {
+  create(@Body() dto: CreateDeviceDto, @Session() { user }: { user: User }) {
     return this.devicesService.create(dto, user.id);
   }
 
@@ -58,7 +58,7 @@ export class DevicesController {
   update(
     @Param('id') id: string,
     @Body() dto: UpdateDeviceDto,
-    @Session() user: User,
+    @Session() { user }: { user: User },
   ) {
     const isAdmin = user.role === Role.ADMIN;
     return this.devicesService.update(id, dto, user.id, isAdmin);
@@ -67,7 +67,7 @@ export class DevicesController {
   @Delete(':id')
   @Roles(ALL_ROLES)
   @Doc({ summary: 'Role: All - Delete device (ownership validated)' })
-  remove(@Param('id') id: string, @Session() user: User) {
+  remove(@Param('id') id: string, @Session() { user }: { user: User }) {
     const isAdmin = user.role === Role.ADMIN;
     return this.devicesService.remove(id, user.id, isAdmin);
   }

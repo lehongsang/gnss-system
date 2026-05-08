@@ -22,14 +22,14 @@ export class MediaLogsController {
   @Get('mine')
   @Roles(ALL_ROLES)
   @Doc({ summary: 'Role: All - Get media logs for my devices' })
-  findMine(@Session() user: User, @Query() query: MediaLogQueryDto) {
+  findMine(@Session() { user }: { user: User }, @Query() query: MediaLogQueryDto) {
     return this.mediaLogsService.findAll(query, user.id, false);
   }
 
   @Get(':id')
   @Roles(ALL_ROLES)
   @Doc({ summary: 'Role: All - Get media log by id' })
-  findOne(@Param('id') id: string, @Session() user: User) {
+  findOne(@Param('id') id: string, @Session() { user }: { user: User }) {
     const isAdmin = user.role === Role.ADMIN;
     return this.mediaLogsService.findOne(id, user.id, isAdmin);
   }
@@ -37,7 +37,7 @@ export class MediaLogsController {
   @Get(':id/stream')
   @Roles(ALL_ROLES)
   @Doc({ summary: 'Role: All - Get medial log stream url' })
-  getStreamUrl(@Param('id') id: string, @Session() user: User) {
+  getStreamUrl(@Param('id') id: string, @Session() { user }: { user: User }) {
     const isAdmin = user.role === Role.ADMIN;
     return this.mediaLogsService.getStreamUrl(id, user.id, isAdmin);
   }

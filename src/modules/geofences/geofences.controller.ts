@@ -33,14 +33,14 @@ export class GeofencesController {
   @Get('mine')
   @Roles(ALL_ROLES)
   @Doc({ summary: 'Role: All - Get my geofences' })
-  findMine(@Session() user: User, @Query() query: GetManyBaseQueryParams) {
+  findMine(@Session() { user }: { user: User }, @Query() query: GetManyBaseQueryParams) {
     return this.geofencesService.findAll(query, user.id, false);
   }
 
   @Get(':id')
   @Roles(ALL_ROLES)
   @Doc({ summary: 'Role: All - Get geofence by id' })
-  findOne(@Param('id') id: string, @Session() user: User) {
+  findOne(@Param('id') id: string, @Session() { user }: { user: User }) {
     const isAdmin = user.role === Role.ADMIN;
     return this.geofencesService.findOne(id, user.id, isAdmin);
   }
@@ -48,7 +48,7 @@ export class GeofencesController {
   @Post()
   @Roles(ALL_ROLES)
   @Doc({ summary: 'Role: All - Create a geofence' })
-  create(@Body() dto: CreateGeofenceDto, @Session() user: User) {
+  create(@Body() dto: CreateGeofenceDto, @Session() { user }: { user: User }) {
     return this.geofencesService.create(dto, user.id);
   }
 
@@ -58,7 +58,7 @@ export class GeofencesController {
   update(
     @Param('id') id: string,
     @Body() dto: UpdateGeofenceDto,
-    @Session() user: User,
+    @Session() { user }: { user: User },
   ) {
     const isAdmin = user.role === Role.ADMIN;
     return this.geofencesService.update(id, dto, user.id, isAdmin);
@@ -67,7 +67,7 @@ export class GeofencesController {
   @Delete(':id')
   @Roles(ALL_ROLES)
   @Doc({ summary: 'Role: All - Delete geofence' })
-  remove(@Param('id') id: string, @Session() user: User) {
+  remove(@Param('id') id: string, @Session() { user }: { user: User }) {
     const isAdmin = user.role === Role.ADMIN;
     return this.geofencesService.remove(id, user.id, isAdmin);
   }
@@ -78,7 +78,7 @@ export class GeofencesController {
   async assignDevice(
     @Param('id') id: string,
     @Body() dto: AssignDeviceDto,
-    @Session() user: User,
+    @Session() { user }: { user: User },
   ) {
     const isAdmin = user.role === Role.ADMIN;
     // ensure caller owns it
@@ -92,7 +92,7 @@ export class GeofencesController {
   async removeDevice(
     @Param('id') id: string,
     @Param('deviceId') deviceId: string,
-    @Session() user: User,
+    @Session() { user }: { user: User },
   ) {
     const isAdmin = user.role === Role.ADMIN;
     await this.geofencesService.findOne(id, user.id, isAdmin);

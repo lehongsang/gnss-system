@@ -101,7 +101,6 @@ export class GnssGateway implements OnGatewayConnection, OnGatewayDisconnect {
       lng: number;
       speed: number;
       heading: number;
-      altitude: number;
       timestamp: Date;
     },
   ): void {

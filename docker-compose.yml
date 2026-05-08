@@ -1,7 +1,7 @@
 services:
   postgres:
     container_name: gnss-postgres
-    image: postgres:18
+    image: postgis/postgis:latest
     restart: always
     env_file:
       - .env
@@ -15,7 +15,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql
     ports:
-      - "${POSTGRES_HOST_PORT:-5432}:5432"
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
     networks:
       - datn_gnss
     healthcheck:

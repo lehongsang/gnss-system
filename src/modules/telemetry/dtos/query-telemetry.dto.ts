@@ -1,9 +1,16 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsNotEmpty, IsLatitude, IsLongitude, IsNumber, Min, Max } from 'class-validator';
+import { IsDateString, IsNotEmpty, IsLatitude, IsLongitude, IsNumber, Min, Max, IsOptional } from 'class-validator';
 import { GetManyBaseQueryParams } from '@/commons/dtos/get-many-base.dto';
 import { Transform } from 'class-transformer';
 
 export class TelemetryHistoryQueryDto extends GetManyBaseQueryParams {
+  @ApiProperty({ required: false, example: 500, description: 'Giới hạn tối đa 500' })
+  @IsOptional()
+  @IsNumber()
+  @Transform(({ value }) => Number(value))
+  @Min(1)
+  @Max(500)
+  limit: number = 10;
   @ApiProperty({ example: '2026-01-01T00:00:00Z' })
   @IsDateString()
   @IsNotEmpty()

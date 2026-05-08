@@ -112,6 +112,10 @@ export class MediaLogsService {
   ): Promise<{ url: string }> {
     const log = await this.findOne(id, requesterId, isAdmin);
 
+    if (log.s3Key && log.s3Key.startsWith('mock/') && log.fileUrl) {
+      return { url: log.fileUrl };
+    }
+
     // Generate a presigned GET URL valid for 1 hour (3600s)
     const presignedUrl = await this.storageService.getPresignedUrl(log.s3Key);
     if (!presignedUrl) {

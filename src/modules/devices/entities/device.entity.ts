@@ -7,6 +7,7 @@ import {
 } from 'typeorm';
 import { BaseEntity } from '@/commons/entities/base.entity';
 import { User } from '@/modules/auth/entities/user.entity';
+import { DeviceGroup } from '@/modules/device-groups/entities/device-group.entity';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsNotEmpty,
@@ -63,6 +64,16 @@ export class Device extends BaseEntity {
   @Min(1)
   @Max(300)
   speedLimitKmh: number | null;
+
+  @ApiPropertyOptional({ description: 'UUID of the device group' })
+  @Column({ type: 'uuid', name: 'device_group_id', nullable: true })
+  @IsOptional()
+  @IsString()
+  deviceGroupId: string | null;
+
+  @ManyToOne(() => DeviceGroup, (group) => group.devices, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'device_group_id' })
+  group: DeviceGroup;
 
   @ApiPropertyOptional()
   @DeleteDateColumn({ name: 'deleted_at' })

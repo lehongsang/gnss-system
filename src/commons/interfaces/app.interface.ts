@@ -30,8 +30,6 @@ export interface CoordinatePayload {
   speed: number;
   /** Heading in degrees (0–360, clockwise from North) */
   heading: number;
-  /** Altitude in meters above sea level */
-  altitude: number;
   /** UTC timestamp of the GPS fix */
   timestamp: Date;
   /** Fusion mode describing the accuracy source */

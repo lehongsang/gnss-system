@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { AuthGuard } from '@thallesp/nestjs-better-auth';
 import { APP_GUARD, APP_FILTER } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { DatabaseModule } from './database/database.module';
@@ -32,15 +31,11 @@ import {
   providers: [
     {
       provide: APP_GUARD,
-      useClass: AuthGuard,
-    },
-    {
-      provide: APP_GUARD,
       useClass: CustomRateLimitGuard,
     },
     {
       provide: APP_FILTER,
-      useClass: CustomExceptionFilter,
+      useClass: AllExceptionsFilter, // Catch-all fallback — registered FIRST, runs LAST
     },
     {
       provide: APP_FILTER,
@@ -52,7 +47,7 @@ import {
     },
     {
       provide: APP_FILTER,
-      useClass: AllExceptionsFilter,
+      useClass: CustomExceptionFilter, // Most specific — registered LAST, runs FIRST
     },
   ],
 })

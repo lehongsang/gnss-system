@@ -75,7 +75,6 @@ export class TelemetryConsumer implements OnModuleInit {
         lat: number;
         speed: number;
         heading: number;
-        altitude: number;
         timestamp: string;
       };
 
@@ -85,7 +84,6 @@ export class TelemetryConsumer implements OnModuleInit {
         lat: data.lat,
         speed: data.speed,
         heading: data.heading,
-        altitude: data.altitude,
         timestamp: new Date(data.timestamp),
         accuracyStatus: 'gnss_only' as AccuracyStatus,
       };
@@ -99,7 +97,6 @@ export class TelemetryConsumer implements OnModuleInit {
         lng: payload.lng,
         speed: payload.speed,
         heading: payload.heading,
-        altitude: payload.altitude,
         timestamp: payload.timestamp,
       });
 

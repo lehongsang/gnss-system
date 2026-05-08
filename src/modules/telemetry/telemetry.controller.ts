@@ -21,7 +21,7 @@ export class TelemetryController {
   getHistory(
     @Param('deviceId') deviceId: string,
     @Query() query: TelemetryHistoryQueryDto,
-    @Session() user: User,
+    @Session() { user }: { user: User },
   ) {
     const isAdmin = user.role === Role.ADMIN;
     return this.telemetryService.findHistory(deviceId, query, user.id, isAdmin);
@@ -30,9 +30,16 @@ export class TelemetryController {
   @Get(':deviceId/latest')
   @Roles(ALL_ROLES)
   @Doc({ summary: 'Role: All - Get device latest telemetry' })
-  getLatest(@Param('deviceId') deviceId: string, @Session() user: User) {
+  getLatest(@Param('deviceId') deviceId: string, @Session() { user }: { user: User }) {
     const isAdmin = user.role === Role.ADMIN;
     return this.telemetryService.findLatest(deviceId, user.id, isAdmin);
+  }
+
+  @Get('latest/all')
+  @Roles([Role.ADMIN])
+  @Doc({ summary: 'Role: Admin - Get latest telemetry for all devices' })
+  getLatestAll() {
+    return this.telemetryService.findLatestAll();
   }
 
   @Get('nearby')

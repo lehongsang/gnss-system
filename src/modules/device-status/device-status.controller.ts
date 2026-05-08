@@ -11,10 +11,17 @@ import { Doc } from '@/commons/docs/doc.decorator';
 export class DeviceStatusController {
   constructor(private readonly deviceStatusService: DeviceStatusService) {}
 
+  @Get('status/all')
+  @Roles([Role.ADMIN])
+  @Doc({ summary: 'Role: Admin - Get all device statuses' })
+  getAllStatuses() {
+    return this.deviceStatusService.findAll();
+  }
+
   @Get(':id/status')
   @Roles(ALL_ROLES)
   @Doc({ summary: 'Role: All - Get device status' })
-  getStatus(@Param('id') id: string, @Session() user: User) {
+  getStatus(@Param('id') id: string, @Session() { user }: { user: User }) {
     const isAdmin = user.role === Role.ADMIN;
     return this.deviceStatusService.findByDevice(id, user.id, isAdmin);
   }
