@@ -129,6 +129,23 @@ export class DevicesService {
     return { message: 'Device deleted successfully' };
   }
 
+  /**
+   * Finds a device by ID without ownership check.
+   * Used by device-facing APIs (e.g. presigned URL upload) where
+   * there is no authenticated user session.
+   *
+   * @param id - The device UUID
+   * @returns The device entity
+   * @throws NotFoundException if device does not exist
+   */
+  async findOneById(id: string): Promise<Device> {
+    const device = await this.deviceRepository.findOne({
+      where: { id },
+    });
+    if (!device) throw new NotFoundException('Device not found');
+    return device;
+  }
+
   async findByMac(macAddress: string): Promise<Device | null> {
     return this.deviceRepository.findOneBy({ macAddress });
   }

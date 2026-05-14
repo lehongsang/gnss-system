@@ -10,6 +10,7 @@ import { KafkaTopic } from '@/services/kafka/kafka.enum';
 import type {
   MqttCoordinatesPayload,
   MqttAlertPayload,
+  MqttDeviceStatusPayload,
 } from './mqtt.interface';
 
 @Injectable()
@@ -37,6 +38,7 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
       // Subscribe to all GNSS device topics using single-level wildcard
       this.client.subscribe('gnss/+/coordinates');
       this.client.subscribe('gnss/+/alert');
+      this.client.subscribe('gnss/+/status');
       this.client.subscribe('gnss/+/image');
       this.client.subscribe('gnss/+/video');
       this.logger.log('Connected to MQTT Broker and subscribed to gnss topics');
@@ -78,6 +80,9 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
         break;
       case 'alert':
         await this.forwardAlert(deviceId, payload);
+        break;
+      case 'status':
+        await this.forwardStatus(deviceId, payload);
         break;
       case 'image':
       case 'video':
@@ -147,6 +152,36 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
     } catch (e) {
       const error = e as Error;
       this.logger.error(`Failed to parse alert payload: ${error.message}`);
+    }
+  }
+
+  /**
+   * Parses a device status heartbeat payload and produces it to the GNSS_DEVICE_STATUS Kafka topic.
+   *
+   * @param deviceId - Device identifier extracted from the MQTT topic
+   * @param payload  - Raw JSON buffer from the device
+   */
+  private async forwardStatus(
+    deviceId: string,
+    payload: Buffer,
+  ): Promise<void> {
+    try {
+      const data = JSON.parse(payload.toString()) as MqttDeviceStatusPayload;
+      await this.kafkaService.produce(KafkaTopic.GNSS_DEVICE_STATUS, [
+        {
+          key: deviceId,
+          value: {
+            deviceId,
+            status: data.status,
+            batteryLevel: data.batteryLevel,
+            cameraStatus: data.cameraStatus,
+            gnssStatus: data.gnssStatus,
+          },
+        },
+      ]);
+    } catch (e) {
+      const error = e as Error;
+      this.logger.error(`Failed to parse status payload: ${error.message}`);
     }
   }
 

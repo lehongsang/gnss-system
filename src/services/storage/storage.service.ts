@@ -255,6 +255,34 @@ export class StorageService {
   }
 
   /**
+   * Generates a presigned PUT URL that allows an external client (IoT device)
+   * to upload a file directly to S3 without going through the backend.
+   *
+   * This is the "Out-of-band Upload" pattern: MQTT handles lightweight signaling,
+   * while the actual binary payload travels over HTTP directly to object storage.
+   *
+   * @param key - The S3 object key (path) where the file will be stored
+   * @param mimeType - MIME type of the file to be uploaded (e.g. 'image/jpeg')
+   * @param expiresInSeconds - How long the URL remains valid (default 1 hour)
+   * @returns A time-limited URL with embedded AWS credentials for PUT upload
+   */
+  async getPresignedUploadUrl(
+    key: string,
+    mimeType: string,
+    expiresInSeconds = 3600,
+  ): Promise<string> {
+    const command = new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+      ContentType: mimeType,
+    });
+
+    return await getSignedUrl(this.s3Client, command, {
+      expiresIn: expiresInSeconds,
+    });
+  }
+
+  /**
    * Uploads a raw buffer directly to S3 and returns the object key.
    */
   async uploadRawFile(

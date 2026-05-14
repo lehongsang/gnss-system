@@ -74,7 +74,10 @@ Hệ thống sử dụng BetterAuth để xử lý bảo mật toàn diện:
 ### 2.4. Vùng Địa Lý (Geofences)
 - **Quản lý Geofence:** Vẽ và tạo vùng địa lý (Polygon) trên bản đồ (lưu GeoJSON -> PostGIS geometry).
 - **Gán thiết bị vào vùng:** Link thiết bị vào 1 hoặc nhiều geofence để theo dõi.
-- **Kiểm tra vi phạm:** Sử dụng PostGIS `ST_Within` để đối chiếu xem thiết bị đã di chuyển ra khỏi vùng an toàn chưa.
+- **Kiểm tra vi phạm (Server-side Check):** Thay vì bắt vi điều khiển IoT tự tính toán, hệ thống áp dụng cơ chế Server-side tự động quét mỗi khi có tọa độ GPS mới gửi về. Quá trình này được tối ưu hóa cực độ để không làm sập Server nhờ 3 lớp kiến trúc:
+  1. **Sức mạnh PostGIS & GiST Index:** Sử dụng hàm `ST_Within` kết hợp với chỉ mục không gian `GiST`. PostGIS không quét toàn bộ đa giác phức tạp mà dùng thuật toán **Bounding Box** (vẽ hình chữ nhật bọc quanh đa giác) để lọc nhanh trong vài nanosecond, giảm độ phức tạp thuật toán xuống O(1).
+  2. **Thu hẹp phạm vi quét:** Câu lệnh SQL chỉ JOIN kiểm tra tọa độ với đúng 1 hoặc 2 Geofence mà thiết bị đó được gán, thay vì quét toàn bộ hệ thống.
+  3. **Chống Spam Cảnh Báo (Redis Cooldown):** Khi xe lọt ra khỏi vùng, Server kích hoạt 1 Alert và dùng Redis `setex` để đóng băng cảnh báo này trong 5 phút. Nếu xe vẫn lượn lờ ngoài vùng an toàn trong 5 phút đó, Server sẽ im lặng không spam hàng nghìn Email gây crash hệ thống thư báo.
 
 ### 2.5. Hệ thống Cảnh báo (Alerts)
 - **Tiếp nhận Alert:** Consumer Kafka đọc các alert từ `gnss.alerts` (ví dụ: Geofence Exit, Mất tín hiệu, Có vật cản).

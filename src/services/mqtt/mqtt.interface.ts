@@ -45,3 +45,14 @@ export interface MqttMediaPayload {
   mimeType: string;
   timestamp: string;
 }
+
+/**
+ * Payload for device status heartbeat received from an MQTT device.
+ * Topic: gnss/{deviceId}/status
+ */
+export interface MqttDeviceStatusPayload {
+  status: string;
+  batteryLevel: number;
+  cameraStatus: boolean;
+  gnssStatus: boolean;
+}

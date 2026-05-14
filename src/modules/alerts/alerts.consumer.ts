@@ -124,7 +124,10 @@ export class AlertsConsumer implements OnModuleInit {
           });
 
           // Step 5: Send email notification for critical alerts
-          if (CRITICAL_ALERT_TYPES.includes(alertType)) {
+          // Chỉ gửi email nếu thiết bị báo cáo mức độ thực sự nguy hiểm (HIGH hoặc CRITICAL)
+          const isHighSeverity = data.severity === 'CRITICAL' || data.severity === 'HIGH';
+
+          if (CRITICAL_ALERT_TYPES.includes(alertType) && isHighSeverity) {
             const title = ALERT_TITLES[alertType] ?? 'Cảnh báo từ thiết bị';
             const body = `Thiết bị "${device.name}": ${savedAlert.message}`;
 

@@ -8,6 +8,7 @@ import { DevicesModule } from '@/modules/devices/devices.module';
 import { KafkaModule } from '@/services/kafka/kafka.module';
 import { GnssGatewayModule } from '@/gateways/gnss-gateway.module';
 import { AlertsModule } from '@/modules/alerts/alerts.module';
+import { GeofencesModule } from '@/modules/geofences/geofences.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { AlertsModule } from '@/modules/alerts/alerts.module';
     KafkaModule,
     GnssGatewayModule,
     AlertsModule,
+    GeofencesModule,
   ],
   controllers: [TelemetryController],
   providers: [TelemetryService, TelemetryConsumer],

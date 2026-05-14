@@ -287,7 +287,7 @@ services:
       - datn_gnss
 
   kafka-ui:
-    container_name: kafka-ui
+    container_name: gnss-kafka-ui
     image: provectuslabs/kafka-ui:latest
     ports:
       - "${KAFKA_UI_PORT:-8088}:8080"

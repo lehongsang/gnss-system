@@ -4,6 +4,7 @@ import { TelemetryService } from './telemetry.service';
 import { GnssGateway } from '@/gateways/gnss.gateway';
 import { DevicesService } from '@/modules/devices/devices.service';
 import { AlertsService } from '@/modules/alerts/alerts.service';
+import { GeofencesService } from '@/modules/geofences/geofences.service';
 import { RedisService } from '@/services/redis/redis.service';
 import { EachMessageHandler } from 'kafkajs';
 import { KafkaConsumerGroup, KafkaTopic } from '@/services/kafka/kafka.enum';
@@ -34,6 +35,7 @@ export class TelemetryConsumer implements OnModuleInit {
     private readonly devicesService: DevicesService,
     private readonly alertsService: AlertsService,
     private readonly redisService: RedisService,
+    private readonly geofencesService: GeofencesService,
   ) {}
 
   /**
@@ -103,6 +105,9 @@ export class TelemetryConsumer implements OnModuleInit {
       // Step 5: Server-side speed detection
       await this.checkSpeedViolation(data.deviceId, payload);
 
+      // Step 6: Server-side geofence detection
+      await this.checkGeofenceViolation(data.deviceId, payload);
+
       this.logger.log(
         `[P:${partition}][Offset:${offset}] Saved + broadcast telemetry for device ${data.deviceId}`,
       );
@@ -167,6 +172,63 @@ export class TelemetryConsumer implements OnModuleInit {
       // Speed check failure should not block telemetry processing
       this.logger.warn(
         `Speed check failed for device ${deviceId}: ${error instanceof Error ? error.message : error}`,
+      );
+    }
+  }
+
+  /**
+   * Checks if the device has exited any of its assigned geofences.
+   * Leverages PostGIS server-side spatial querying via GeofencesService.
+   *
+   * @param deviceId - UUID of the device
+   * @param payload - The coordinate payload
+   */
+  private async checkGeofenceViolation(
+    deviceId: string,
+    payload: CoordinatePayload,
+  ): Promise<void> {
+    try {
+      // Find all geofences this device is assigned to, but is currently OUTSIDE of.
+      const violatedGeofences = await this.geofencesService.getViolatedGeofences(
+        deviceId,
+        payload.lat,
+        payload.lng,
+      );
+
+      if (!violatedGeofences || violatedGeofences.length === 0) return;
+
+      // For each violated geofence, check cooldown and trigger alert
+      for (const geofence of violatedGeofences) {
+        const cooldownKey = `geofence_exit:${deviceId}:${geofence.id}`;
+        const alreadyAlerted = await this.redisService.get(cooldownKey);
+
+        if (alreadyAlerted) continue; // Alert was already sent recently
+
+        // Create the GEOFENCE_EXIT alert
+        await this.alertsService.create({
+          deviceId,
+          alertType: AlertType.GEOFENCE_EXIT,
+          message: `Cảnh báo! Xe đã di chuyển ra ngoài vùng an toàn: ${geofence.name}`,
+          lat: payload.lat,
+          lng: payload.lng,
+        });
+
+        // Set cooldown (e.g., 5 minutes = 300s) to prevent spamming emails
+        const GEOFENCE_COOLDOWN_SECONDS = 300;
+        await this.redisService.setex(
+          cooldownKey,
+          GEOFENCE_COOLDOWN_SECONDS,
+          '1',
+        );
+
+        this.logger.warn(
+          `GEOFENCE_EXIT detected for device ${deviceId} outside of ${geofence.name}`,
+        );
+      }
+    } catch (error) {
+      // Geofence check failure should not block telemetry processing
+      this.logger.warn(
+        `Geofence check failed for device ${deviceId}: ${error instanceof Error ? error.message : error}`,
       );
     }
   }
