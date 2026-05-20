@@ -6,6 +6,7 @@ import { EachMessageHandler } from 'kafkajs';
 import { KafkaConsumerGroup, KafkaTopic } from '@/services/kafka/kafka.enum';
 import { LoggerService } from '@/commons/logger/logger.service';
 import { MediaType } from './entities/media-log.entity';
+import { AlertsService } from '@/modules/alerts/alerts.service';
 
 interface MediaUploadMessage {
   deviceId: string;
@@ -13,6 +14,7 @@ interface MediaUploadMessage {
   data: string; // Base64 string
   mimeType: string;
   timestamp: string;
+  snapshotId?: string;
 }
 
 @Injectable()
@@ -23,6 +25,7 @@ export class MediaLogsConsumer implements OnModuleInit {
     private readonly kafkaService: KafkaService,
     private readonly storageService: StorageService,
     private readonly mediaLogsService: MediaLogsService,
+    private readonly alertsService: AlertsService,
   ) {}
 
   async onModuleInit() {
@@ -76,19 +79,29 @@ export class MediaLogsConsumer implements OnModuleInit {
           : MediaType.VIDEO_CHUNK;
 
       // Save to database
-      await this.mediaLogsService.create({
+      const savedLog = await this.mediaLogsService.create({
         deviceId: payload.deviceId,
         mediaType: mappedMediaType,
         startTime: new Date(payload.timestamp),
         endTime: new Date(payload.timestamp), // For image frames, end = start. For video, could be different but we use the timestamp as is.
         s3Key: s3Key,
         fileUrl: '', // Using presigned URLs now, so fileUrl can be empty
+        snapshotId: payload.snapshotId ?? null,
       });
 
+      if (payload.snapshotId && mappedMediaType === MediaType.IMAGE_FRAME) {
+        await this.alertsService.linkSnapshotMedia(
+          payload.deviceId,
+          payload.snapshotId,
+          savedLog.id,
+        );
+      }
+
     } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
       this.logger.error(
-        `Failed to process media upload message at offset ${offset} on topic ${topic}`,
-        error instanceof Error ? error.stack : error,
+        `Failed to process media upload message at offset ${offset} on topic ${topic}: ${errMsg}`,
+        error instanceof Error ? error.stack : undefined,
       );
     }
   };

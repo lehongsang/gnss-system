@@ -32,6 +32,8 @@ export interface MqttAlertPayload {
   lat: number;
   /** ISO 8601 UTC timestamp string */
   timestamp: string;
+  /** Optional correlation ID used to link this alert with a snapshot image */
+  snapshotId?: string;
 }
 
 /**
@@ -44,6 +46,8 @@ export interface MqttMediaPayload {
   data: string;
   mimeType: string;
   timestamp: string;
+  /** Optional correlation ID used to link this media with an alert */
+  snapshotId?: string;
 }
 
 /**

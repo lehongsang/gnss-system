@@ -23,6 +23,7 @@ export { MediaType };
 
 @Entity('media_logs')
 @Index(['deviceId', 'startTime'])
+@Index(['deviceId', 'snapshotId'])
 export class MediaLog extends BaseEntity {
   @ApiProperty({ description: 'Device UUID that produced this media record' })
   @Column({ type: 'uuid', name: 'device_id', nullable: false })
@@ -63,6 +64,12 @@ export class MediaLog extends BaseEntity {
   @IsOptional()
   @IsString()
   fileUrl: string | null;
+
+  @ApiPropertyOptional({ description: 'Correlation ID shared with an alert snapshot' })
+  @Column({ type: 'varchar', nullable: true, name: 'snapshot_id', length: 128 })
+  @IsOptional()
+  @IsString()
+  snapshotId: string | null;
 
   @ApiPropertyOptional()
   @DeleteDateColumn({ name: 'deleted_at' })

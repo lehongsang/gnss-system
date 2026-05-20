@@ -4,12 +4,13 @@ import { AlertsService } from './alerts.service';
 import { AlertsConsumer } from './alerts.consumer';
 import { AlertsController } from './alerts.controller';
 import { Alert } from './entities/alert.entity';
+import { MediaLog } from '@/modules/media-logs/entities/media-log.entity';
 import { DevicesModule } from '@/modules/devices/devices.module';
 import { KafkaModule } from '@/services/kafka/kafka.module';
 import { GnssGatewayModule } from '@/gateways/gnss-gateway.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Alert]), DevicesModule, KafkaModule, GnssGatewayModule],
+  imports: [TypeOrmModule.forFeature([Alert, MediaLog]), DevicesModule, KafkaModule, GnssGatewayModule],
   controllers: [AlertsController],
   providers: [AlertsService, AlertsConsumer],
   exports: [AlertsService],

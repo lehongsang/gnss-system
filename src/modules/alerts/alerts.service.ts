@@ -4,19 +4,21 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { Alert } from './entities/alert.entity';
 import { AlertQueryDto } from './dtos/query-alert.dto';
 import { CreateAlertDto } from './dtos/create-alert.dto';
 import { DevicesService } from '@/modules/devices/devices.service';
 import { GetManyBaseResponseDto } from '@/commons/dtos/get-many-base.dto';
-import { Device } from '@/modules/devices/entities/device.entity';
+import { MediaLog, MediaType } from '@/modules/media-logs/entities/media-log.entity';
 
 @Injectable()
 export class AlertsService {
   constructor(
     @InjectRepository(Alert)
     private readonly alertRepository: Repository<Alert>,
+    @InjectRepository(MediaLog)
+    private readonly mediaLogRepository: Repository<MediaLog>,
     private readonly devicesService: DevicesService,
   ) {}
 
@@ -41,14 +43,10 @@ export class AlertsService {
     } = query;
     const qb = this.alertRepository.createQueryBuilder('alert');
 
-    // For non-admin, use INNER JOIN to filter by device ownership in one query
+    // For non-admin, join the device so dashboard clients can display device names.
     if (!isAdmin) {
-      qb.innerJoin(
-        Device,
-        'd',
-        'd.id = alert.deviceId AND d.ownerId = :requesterId',
-        { requesterId },
-      );
+      qb.innerJoinAndSelect('alert.device', 'device')
+        .andWhere('device.ownerId = :requesterId', { requesterId });
 
       if (deviceId) {
         qb.andWhere('alert.deviceId = :deviceId', { deviceId });
@@ -120,5 +118,40 @@ export class AlertsService {
   async create(dto: CreateAlertDto): Promise<Alert> {
     const alert = this.alertRepository.create(dto);
     return this.alertRepository.save(alert);
+  }
+
+  /**
+   * Finds the latest image media log that shares the same device and snapshot correlation ID.
+   */
+  async findSnapshotMediaLog(
+    deviceId: string,
+    snapshotId: string,
+  ): Promise<MediaLog | null> {
+    return this.mediaLogRepository.findOne({
+      where: {
+        deviceId,
+        snapshotId,
+        mediaType: MediaType.IMAGE_FRAME,
+      },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /**
+   * Links an existing alert to a snapshot image when both share a correlation ID.
+   */
+  async linkSnapshotMedia(
+    deviceId: string,
+    snapshotId: string,
+    mediaLogId: string,
+  ): Promise<void> {
+    await this.alertRepository.update(
+      {
+        deviceId,
+        snapshotId,
+        snapshotMediaLogId: IsNull(),
+      },
+      { snapshotMediaLogId: mediaLogId },
+    );
   }
 }

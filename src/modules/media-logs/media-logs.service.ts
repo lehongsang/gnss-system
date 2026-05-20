@@ -18,6 +18,7 @@ import {
 import { ConfirmUploadDto, ConfirmMediaType } from './dtos/confirm-upload.dto';
 import { MediaType } from './entities/media-log.entity';
 import { LoggerService } from '@/commons/logger/logger.service';
+import { AlertsService } from '@/modules/alerts/alerts.service';
 
 @Injectable()
 export class MediaLogsService {
@@ -28,6 +29,7 @@ export class MediaLogsService {
     private readonly mediaLogRepository: Repository<MediaLog>,
     private readonly devicesService: DevicesService,
     private readonly storageService: StorageService,
+    private readonly alertsService: AlertsService,
   ) {}
 
   /**
@@ -224,9 +226,17 @@ export class MediaLogsService {
       endTime: new Date(),
       s3Key: dto.s3Key,
       fileUrl: '',
+      snapshotId: dto.snapshotId ?? null,
     });
 
     const savedLog = await this.mediaLogRepository.save(log);
+    if (dto.snapshotId && mappedMediaType === MediaType.IMAGE_FRAME) {
+      await this.alertsService.linkSnapshotMedia(
+        dto.deviceId,
+        dto.snapshotId,
+        savedLog.id,
+      );
+    }
 
     this.logger.log(
       `Media upload confirmed for device ${dto.deviceId}: ${dto.s3Key} (${dto.mediaType})`,
@@ -235,5 +245,4 @@ export class MediaLogsService {
     return savedLog;
   }
 }
-
 

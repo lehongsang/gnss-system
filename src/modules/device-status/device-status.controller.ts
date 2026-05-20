@@ -18,6 +18,13 @@ export class DeviceStatusController {
     return this.deviceStatusService.findAll();
   }
 
+  @Get('status/mine')
+  @Roles(ALL_ROLES)
+  @Doc({ summary: 'Role: All - Get statuses for my devices' })
+  getMineStatuses(@Session() { user }: { user: User }) {
+    return this.deviceStatusService.findMine(user.id);
+  }
+
   @Get(':id/status')
   @Roles(ALL_ROLES)
   @Doc({ summary: 'Role: All - Get device status' })

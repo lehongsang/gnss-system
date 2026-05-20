@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { BaseEntity } from '@/commons/entities/base.entity';
 import { Device } from '@/modules/devices/entities/device.entity';
+import { MediaLog } from '@/modules/media-logs/entities/media-log.entity';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { AlertType } from '@/commons/enums/app.enum';
 import {
@@ -16,6 +17,7 @@ import {
   IsLatitude,
   IsLongitude,
   IsNotEmpty,
+  IsOptional,
   IsString,
   IsUrl,
   IsUUID,
@@ -26,6 +28,7 @@ export { AlertType };
 
 @Entity('alerts')
 @Index(['deviceId', 'createdAt'])
+@Index(['deviceId', 'snapshotId'])
 export class Alert extends BaseEntity {
   @ApiProperty({ description: 'Device UUID that triggered the alert' })
   @Column({ type: 'uuid', name: 'device_id', nullable: false })
@@ -69,8 +72,26 @@ export class Alert extends BaseEntity {
 
   @ApiPropertyOptional({ description: 'URL to a snapshot taken at the time of alert' })
   @Column({ type: 'varchar', nullable: true, name: 'snapshot_url' })
+  @IsOptional()
   @IsUrl()
   snapshotUrl: string | null;
+
+  @ApiPropertyOptional({ description: 'Correlation ID shared with the snapshot media payload' })
+  @Column({ type: 'varchar', nullable: true, name: 'snapshot_id', length: 128 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  snapshotId: string | null;
+
+  @ApiPropertyOptional({ description: 'Linked media log UUID for the alert snapshot' })
+  @Column({ type: 'uuid', nullable: true, name: 'snapshot_media_log_id' })
+  @IsOptional()
+  @IsUUID('7')
+  snapshotMediaLogId: string | null;
+
+  @ManyToOne(() => MediaLog, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'snapshot_media_log_id' })
+  snapshotMediaLog: MediaLog | null;
 
   @ApiProperty({ description: 'Whether the alert has been acknowledged / resolved' })
   @Column({ type: 'boolean', default: false, name: 'is_resolved' })

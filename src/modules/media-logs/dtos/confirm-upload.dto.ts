@@ -1,5 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsNotEmpty, IsString, IsUUID } from 'class-validator';
+import {
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
 
 /**
  * Enum for the confirm-upload media type.
@@ -35,4 +42,13 @@ export class ConfirmUploadDto {
   @IsNotEmpty()
   @IsEnum(ConfirmMediaType)
   mediaType: ConfirmMediaType;
+
+  @ApiProperty({
+    description: 'Optional correlation ID used to link this upload to an alert',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  snapshotId?: string;
 }

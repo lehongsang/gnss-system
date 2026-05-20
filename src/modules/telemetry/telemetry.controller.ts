@@ -35,6 +35,13 @@ export class TelemetryController {
     return this.telemetryService.findLatest(deviceId, user.id, isAdmin);
   }
 
+  @Get('latest/mine')
+  @Roles(ALL_ROLES)
+  @Doc({ summary: 'Role: All - Get latest telemetry for my devices' })
+  getLatestMine(@Session() { user }: { user: User }) {
+    return this.telemetryService.findLatestMine(user.id);
+  }
+
   @Get('latest/all')
   @Roles([Role.ADMIN])
   @Doc({ summary: 'Role: Admin - Get latest telemetry for all devices' })

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { DeviceStatus } from './entities/device-status.entity';
 import { UpdateDeviceStatusDto } from './dtos/update-device-status.dto';
 import { DevicesService } from '@/modules/devices/devices.service';
@@ -12,6 +12,7 @@ export class DeviceStatusService {
     @InjectRepository(DeviceStatus)
     private readonly deviceStatusRepository: Repository<DeviceStatus>,
     private readonly devicesService: DevicesService,
+    private readonly dataSource: DataSource,
   ) {}
 
 
@@ -52,6 +53,30 @@ export class DeviceStatusService {
    */
   async findAll(): Promise<DeviceStatus[]> {
     return this.deviceStatusRepository.find();
+  }
+
+  /**
+   * Returns status rows for every device owned by the requester.
+   * Devices without a heartbeat record are represented as offline defaults.
+   */
+  async findMine(ownerId: string): Promise<DeviceStatus[]> {
+    return this.dataSource.query<DeviceStatus[]>(
+      `
+      SELECT
+        d.id AS "deviceId",
+        COALESCE(ds.status, 'offline') AS status,
+        COALESCE(ds.battery_level, 0) AS "batteryLevel",
+        COALESCE(ds.camera_status, false) AS "cameraStatus",
+        COALESCE(ds.gnss_status, false) AS "gnssStatus",
+        ds.updated_at AS "updatedAt"
+      FROM devices d
+      LEFT JOIN device_status ds ON ds.device_id = d.id
+      WHERE d.owner_id = $1
+        AND d.deleted_at IS NULL
+      ORDER BY d."createdAt" DESC
+      `,
+      [ownerId],
+    );
   }
 
   async upsert(

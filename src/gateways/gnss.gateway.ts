@@ -126,6 +126,8 @@ export class GnssGateway implements OnGatewayConnection, OnGatewayDisconnect {
       message: string;
       lat: number;
       lng: number;
+      snapshotId: string | null;
+      snapshotMediaLogId: string | null;
     },
   ): void {
     this.server.to(`user:${deviceOwnerId}`).emit('alert:new', alert);

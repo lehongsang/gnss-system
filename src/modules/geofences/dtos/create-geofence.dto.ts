@@ -13,7 +13,7 @@ export class CreateGeofenceDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(255)
-  name: string;
+  name!: string;
 
   @ApiPropertyOptional({ example: '#3b82f6' })
   @IsOptional()
@@ -36,12 +36,12 @@ export class CreateGeofenceDto {
   })
   @IsNotEmpty()
   @IsObject()
-  geom: object;
+  geom!: object;
 }
 
 export class AssignDeviceDto {
   @ApiProperty()
   @IsUUID('7')
   @IsNotEmpty()
-  deviceId: string;
+  deviceId!: string;
 }

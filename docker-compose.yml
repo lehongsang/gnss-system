@@ -251,7 +251,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "curl -fsS http://localhost:9333/cluster/status >/dev/null || exit 1",
+          "wget -q -O /dev/null http://localhost:9333/cluster/status || exit 1",
         ]
       interval: 10s
       timeout: 5s

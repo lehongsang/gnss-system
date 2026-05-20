@@ -96,12 +96,20 @@ export class AlertsConsumer implements OnModuleInit {
       }
 
       // Step 3: Create the alert record
+      const snapshotMediaLog = data.snapshotId
+        ? await this.alertsService.findSnapshotMediaLog(
+            data.deviceId,
+            data.snapshotId,
+          )
+        : null;
       const savedAlert = await this.alertsService.create({
         deviceId: data.deviceId,
         alertType,
         message: data.message,
         lat: data.location.lat,
         lng: data.location.lng,
+        snapshotId: data.snapshotId,
+        snapshotMediaLogId: snapshotMediaLog?.id,
       });
 
       // Step 4 & 5: Look up device owner → WebSocket broadcast + email notification
@@ -121,6 +129,8 @@ export class AlertsConsumer implements OnModuleInit {
             message: savedAlert.message,
             lat: savedAlert.lat,
             lng: savedAlert.lng,
+            snapshotId: savedAlert.snapshotId,
+            snapshotMediaLogId: savedAlert.snapshotMediaLogId,
           });
 
           // Step 5: Send email notification for critical alerts

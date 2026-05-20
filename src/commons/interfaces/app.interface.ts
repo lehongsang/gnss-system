@@ -55,6 +55,8 @@ export interface AlertKafkaPayload {
   location: { lng: number; lat: number };
   /** ISO 8601 UTC timestamp string */
   timestamp: string;
+  /** Optional correlation ID used to link this alert with a snapshot image */
+  snapshotId?: string;
 }
 
 // ─── Device Status ─────────────────────────────────────────────────────────────

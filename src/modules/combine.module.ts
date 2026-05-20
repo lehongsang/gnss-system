@@ -10,13 +10,14 @@ import { AlertsModule } from './alerts/alerts.module';
 import { MediaLogsModule } from './media-logs/media-logs.module';
 import { StatisticsModule } from './statistics/statistics.module';
 import { DeviceGroupsModule } from './device-groups/device-groups.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
     AuthModule, RootModule, UsersModule,
     DevicesModule, DeviceStatusModule, TelemetryModule,
     GeofencesModule, AlertsModule, MediaLogsModule,
-    StatisticsModule, DeviceGroupsModule,
+    StatisticsModule, DeviceGroupsModule, DashboardModule,
   ],
 })
 export class CombineModule {}

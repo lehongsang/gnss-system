@@ -43,4 +43,17 @@ export class CreateAlertDto {
   @IsOptional()
   @IsUrl()
   snapshotUrl?: string;
+
+  @ApiPropertyOptional({
+    description: 'Correlation ID that links this alert to a snapshot media log',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  snapshotId?: string;
+
+  @ApiPropertyOptional({ description: 'Media log UUID for the linked snapshot image' })
+  @IsOptional()
+  @IsUUID('7')
+  snapshotMediaLogId?: string;
 }

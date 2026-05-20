@@ -146,6 +146,7 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
             message: data.message,
             location: { lng: data.lng, lat: data.lat },
             timestamp: data.timestamp,
+            snapshotId: data.snapshotId,
           },
         },
       ]);
@@ -186,28 +187,64 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Encodes raw binary media (image/video) as Base64 and produces it
-   * to the GNSS_MEDIA_UPLOAD Kafka topic for downstream storage processing.
+   * Forwards media data to Kafka for async processing.
+   * Supports two payload formats from devices:
+   * 1. **Raw binary** (JPEG/MP4 bytes) → Base64-encodes for Kafka transport
+   * 2. **JSON with embedded Base64** → passes through the pre-encoded `data` field
    *
    * @param deviceId  - Device identifier extracted from the MQTT topic
    * @param mediaType - 'image' | 'video'
-   * @param payload   - Raw binary buffer from the device camera
+   * @param payload   - Raw buffer from the MQTT message
    */
   private async forwardMedia(
     deviceId: string,
     mediaType: 'image' | 'video',
     payload: Buffer,
   ): Promise<void> {
+    // Step 1: Attempt to parse as JSON (device may send structured payload)
+    let data: string;
+    let mimeType: string;
+    let timestamp: string;
+    let snapshotId: string | undefined;
+
+    try {
+      const parsed = JSON.parse(payload.toString()) as {
+        data?: string;
+        mimeType?: string;
+        timestamp?: string;
+        snapshotId?: string;
+      };
+
+      // If the payload is JSON with a pre-encoded Base64 `data` field, use it directly
+      if (parsed.data) {
+        data = parsed.data;
+        mimeType = parsed.mimeType || (mediaType === 'image' ? 'image/jpeg' : 'video/mp4');
+        timestamp = parsed.timestamp || new Date().toISOString();
+        snapshotId = parsed.snapshotId;
+      } else {
+        // JSON payload without `data` field — encode the entire buffer
+        data = payload.toString('base64');
+        mimeType = mediaType === 'image' ? 'image/jpeg' : 'video/mp4';
+        timestamp = new Date().toISOString();
+        snapshotId = parsed.snapshotId;
+      }
+    } catch {
+      // Step 2: Not valid JSON — treat as raw binary (JPEG/MP4 bytes)
+      data = payload.toString('base64');
+      mimeType = mediaType === 'image' ? 'image/jpeg' : 'video/mp4';
+      timestamp = new Date().toISOString();
+    }
+
     await this.kafkaService.produce(KafkaTopic.GNSS_MEDIA_UPLOAD, [
       {
         key: deviceId,
         value: {
           deviceId,
           mediaType,
-          // Encode buffer as Base64 for transport over Kafka
-          data: payload.toString('base64'),
-          mimeType: mediaType === 'image' ? 'image/jpeg' : 'video/mp4',
-          timestamp: new Date().toISOString(),
+          data,
+          mimeType,
+          timestamp,
+          snapshotId,
         },
       },
     ]);

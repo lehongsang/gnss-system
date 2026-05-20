@@ -139,6 +139,25 @@ export class TelemetryService implements OnModuleInit {
     `);
   }
 
+  /**
+   * Returns the latest telemetry point for every device owned by the requester.
+   * Uses DISTINCT ON to avoid N+1 queries from dashboard screens.
+   */
+  async findLatestMine(ownerId: string): Promise<Telemetry[]> {
+    return this.telemetryRepository.query<Telemetry[]>(
+      `
+      SELECT DISTINCT ON (t.device_id) t.*
+      FROM telemetry t
+      JOIN devices d ON d.id = t.device_id
+      WHERE d.owner_id = $1
+        AND d.deleted_at IS NULL
+        AND t.deleted_at IS NULL
+      ORDER BY t.device_id, t.timestamp DESC
+      `,
+      [ownerId],
+    );
+  }
+
   async findNearby(query: NearbyQueryDto): Promise<Telemetry[]> {
     // PostGIS query for nearby telemetry points
     return this.telemetryRepository.query(
