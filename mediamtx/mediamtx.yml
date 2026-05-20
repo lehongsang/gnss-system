@@ -1,0 +1,24 @@
+api: yes
+apiAddress: :9997
+
+rtsp: yes
+rtspAddress: :8554
+
+webrtc: yes
+webrtcAddress: :8889
+
+hls: no
+
+authMethod: internal
+authInternalUsers:
+  - user: any
+    pass:
+    ips: []
+    permissions:
+      - action: publish
+      - action: read
+      - action: playback
+      - action: api
+
+paths:
+  all_others:

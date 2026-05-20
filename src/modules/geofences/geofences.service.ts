@@ -6,9 +6,14 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Geofence } from './entities/geofence.entity';
+import {
+  GeofenceDeviceState,
+  GeofencePresenceState,
+} from './entities/geofence-device-state.entity';
 import { CreateGeofenceDto } from './dtos/create-geofence.dto';
 import { UpdateGeofenceDto } from './dtos/update-geofence.dto';
 import { DevicesService } from '@/modules/devices/devices.service';
+import { AlertType, GeofenceType } from '@/commons/enums/app.enum';
 import {
   GetManyBaseQueryParams,
   GetManyBaseResponseDto,
@@ -25,6 +30,25 @@ export interface EnrichedGeofence extends Omit<Geofence, 'geom' | 'devices'> {
   paths: { lat: number; lng: number }[];
   vertexCount: number;
   Devices: string[];
+}
+
+export interface GeofenceViolation {
+  geofence: Geofence;
+  alertType: AlertType.GEOFENCE_EXIT | AlertType.GEOFENCE_ENTRY;
+  currentState: GeofencePresenceState;
+  previousState: GeofencePresenceState | null;
+}
+
+interface GeofenceStateRow {
+  id: string;
+  name: string;
+  color: string | null;
+  type: GeofenceType;
+  created_by: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  deleted_at: Date | null;
+  is_inside: boolean;
 }
 
 const parseGeom = (geomStr: string | null): { parsedGeom: GeoJSONPolygon | null, paths: { lat: number; lng: number }[], vertexCount: number } => {
@@ -58,6 +82,8 @@ export class GeofencesService {
   constructor(
     @InjectRepository(Geofence)
     private readonly geofenceRepository: Repository<Geofence>,
+    @InjectRepository(GeofenceDeviceState)
+    private readonly geofenceDeviceStateRepository: Repository<GeofenceDeviceState>,
     private readonly devicesService: DevicesService,
   ) {}
 
@@ -152,6 +178,7 @@ export class GeofencesService {
   async create(dto: CreateGeofenceDto, userId: string): Promise<EnrichedGeofence> {
     const geofence = this.geofenceRepository.create({
       name: dto.name,
+      type: dto.type ?? GeofenceType.ALLOWED_ZONE,
       color: dto.color,
       createdBy: userId,
     });
@@ -187,6 +214,10 @@ export class GeofencesService {
     }
     if (dto.color !== undefined) {
       geofence.color = dto.color;
+      isUpdated = true;
+    }
+    if (dto.type !== undefined) {
+      geofence.type = dto.type;
       isUpdated = true;
     }
 
@@ -268,21 +299,117 @@ export class GeofencesService {
     lat: number,
     lng: number,
   ): Promise<Geofence[]> {
-    // Check if device is outside geofences it is assigned to. Wait: geofence = safe zone?
-    // "getViolatedGeofences: return geofences that the device has EXITED or violated"
+    const violations = await this.evaluateGeofenceTransitions(deviceId, lat, lng);
+    return violations.map((violation) => violation.geofence);
+  }
 
-    // Find all geofences for this device that do NOT contain the point.
-    const violated = await this.geofenceRepository.query<Geofence[]>(
+  /**
+   * Evaluates all geofence rules assigned to a device and returns only newly
+   * triggered violations. The state table prevents repeated alerts while a
+   * device remains in the same violating state.
+   */
+  async evaluateGeofenceTransitions(
+    deviceId: string,
+    lat: number,
+    lng: number,
+  ): Promise<GeofenceViolation[]> {
+    const rows = await this.geofenceRepository.query<GeofenceStateRow[]>(
       `
-      SELECT g.*
+      SELECT
+        g.id,
+        g.name,
+        g.color,
+        COALESCE(g.type, 'allowed_zone') AS type,
+        g.created_by,
+        g."createdAt",
+        g."updatedAt",
+        g.deleted_at,
+        ST_Within(ST_SetSRID(ST_MakePoint($2, $3), 4326), g.geom) AS is_inside
       FROM geofences g
       JOIN device_geofence dg ON dg.geofence_id = g.id
       WHERE dg.device_id = $1
-      AND NOT ST_Within(ST_SetSRID(ST_MakePoint($2, $3), 4326), g.geom)
-    `,
+        AND g.deleted_at IS NULL
+      `,
       [deviceId, lng, lat],
     );
 
-    return violated;
+    const violations: GeofenceViolation[] = [];
+
+    for (const row of rows) {
+      const currentState = row.is_inside
+        ? GeofencePresenceState.INSIDE
+        : GeofencePresenceState.OUTSIDE;
+      const previousState = await this.getPreviousState(deviceId, row.id);
+      await this.saveCurrentState(deviceId, row.id, currentState);
+
+      const isViolation =
+        (row.type === GeofenceType.ALLOWED_ZONE &&
+          currentState === GeofencePresenceState.OUTSIDE) ||
+        (row.type === GeofenceType.FORBIDDEN_ZONE &&
+          currentState === GeofencePresenceState.INSIDE);
+
+      if (!isViolation) continue;
+
+      const isNewViolation =
+        previousState === null || previousState !== currentState;
+      if (!isNewViolation) continue;
+
+      const geofence = this.geofenceRepository.create({
+        id: row.id,
+        name: row.name,
+        color: row.color ?? '#3b82f6',
+        type: row.type,
+        createdBy: row.created_by,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+        deletedAt: row.deleted_at,
+      });
+
+      violations.push({
+        geofence,
+        alertType:
+          row.type === GeofenceType.ALLOWED_ZONE
+            ? AlertType.GEOFENCE_EXIT
+            : AlertType.GEOFENCE_ENTRY,
+        currentState,
+        previousState,
+      });
+    }
+
+    return violations;
+  }
+
+  private async getPreviousState(
+    deviceId: string,
+    geofenceId: string,
+  ): Promise<GeofencePresenceState | null> {
+    const state = await this.geofenceDeviceStateRepository.findOne({
+      where: { deviceId, geofenceId },
+    });
+    return state?.state ?? null;
+  }
+
+  private async saveCurrentState(
+    deviceId: string,
+    geofenceId: string,
+    state: GeofencePresenceState,
+  ): Promise<void> {
+    const existing = await this.geofenceDeviceStateRepository.findOne({
+      where: { deviceId, geofenceId },
+    });
+
+    if (existing) {
+      existing.state = state;
+      await this.geofenceDeviceStateRepository.save(existing);
+      return;
+    }
+
+    await this.geofenceDeviceStateRepository.save(
+      this.geofenceDeviceStateRepository.create({
+        deviceId,
+        geofenceId,
+        state,
+      }),
+    );
   }
 }

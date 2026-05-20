@@ -108,7 +108,7 @@ export class DashboardService {
       SELECT
         COUNT(*) AS "alerts24h",
         COUNT(*) FILTER (
-          WHERE a.alert_type IN ('dangerous_obstacle', 'signal_lost')
+          WHERE a.alert_type IN ('dangerous_obstacle', 'signal_lost', 'geofence_entry')
         ) AS "criticalAlerts",
         COUNT(*) FILTER (
           WHERE a.alert_type IN ('speeding', 'geofence_exit', 'trajectory_deviation')
@@ -117,6 +117,7 @@ export class DashboardService {
           WHERE a.alert_type NOT IN (
             'dangerous_obstacle',
             'signal_lost',
+            'geofence_entry',
             'speeding',
             'geofence_exit',
             'trajectory_deviation'

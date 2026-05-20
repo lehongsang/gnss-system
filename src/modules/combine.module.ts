@@ -11,6 +11,7 @@ import { MediaLogsModule } from './media-logs/media-logs.module';
 import { StatisticsModule } from './statistics/statistics.module';
 import { DeviceGroupsModule } from './device-groups/device-groups.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { LiveStreamsModule } from './live-streams/live-streams.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     DevicesModule, DeviceStatusModule, TelemetryModule,
     GeofencesModule, AlertsModule, MediaLogsModule,
     StatisticsModule, DeviceGroupsModule, DashboardModule,
+    LiveStreamsModule,
   ],
 })
 export class CombineModule {}

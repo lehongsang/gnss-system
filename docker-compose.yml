@@ -286,6 +286,24 @@ services:
     networks:
       - datn_gnss
 
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: gnss-mediamtx
+    restart: always
+    ports:
+      - "${MEDIAMTX_RTSP_PORT:-8554}:8554"
+      - "${MEDIAMTX_WEBRTC_PORT:-8889}:8889"
+      - "${MEDIAMTX_API_PORT:-9997}:9997"
+    environment:
+      MTX_API: "yes"
+      MTX_WEBRTC: "yes"
+      MTX_HLS: "no"
+      MTX_RTSP: "yes"
+    volumes:
+      - ./mediamtx/mediamtx.yml:/mediamtx.yml:ro
+    networks:
+      - datn_gnss
+
   kafka-ui:
     container_name: gnss-kafka-ui
     image: provectuslabs/kafka-ui:latest

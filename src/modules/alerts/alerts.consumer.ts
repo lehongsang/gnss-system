@@ -20,6 +20,7 @@ const ALERT_TITLES: Record<AlertType, string> = {
   [AlertType.SIGNAL_LOST]: '📡 Mất tín hiệu GPS',
   [AlertType.DANGEROUS_OBSTACLE]: '🚧 Phát hiện chướng ngại vật',
   [AlertType.TRAJECTORY_DEVIATION]: '🛤️ Lệch khỏi quỹ đạo',
+  [AlertType.GEOFENCE_ENTRY]: 'Restricted zone entry',
 };
 
 /**
@@ -29,6 +30,7 @@ const ALERT_TITLES: Record<AlertType, string> = {
  */
 const CRITICAL_ALERT_TYPES: AlertType[] = [
   AlertType.GEOFENCE_EXIT,
+  AlertType.GEOFENCE_ENTRY,
   AlertType.SIGNAL_LOST,
   AlertType.DANGEROUS_OBSTACLE,
 ];

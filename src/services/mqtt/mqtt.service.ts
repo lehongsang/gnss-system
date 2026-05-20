@@ -7,6 +7,13 @@ import {
 import * as mqtt from 'mqtt';
 import { KafkaService } from '../kafka/kafka.service';
 import { KafkaTopic } from '@/services/kafka/kafka.enum';
+import { RedisService } from '@/services/redis/redis.service';
+import { MediaServerService } from '@/services/media-server/media-server.service';
+import {
+  DeviceStreamStatusPayload,
+  LiveStreamSession,
+  LiveStreamStatus,
+} from '@/commons/interfaces/live-stream.interface';
 import type {
   MqttCoordinatesPayload,
   MqttAlertPayload,
@@ -18,7 +25,11 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
   private client: mqtt.MqttClient;
   private readonly logger = new Logger(MqttService.name);
 
-  constructor(private readonly kafkaService: KafkaService) {}
+  constructor(
+    private readonly kafkaService: KafkaService,
+    private readonly redisService: RedisService,
+    private readonly mediaServerService: MediaServerService,
+  ) {}
 
   /**
    * Initialises the MQTT client, subscribes to all GNSS device topics,
@@ -41,6 +52,7 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
       this.client.subscribe('gnss/+/status');
       this.client.subscribe('gnss/+/image');
       this.client.subscribe('gnss/+/video');
+      this.client.subscribe('gnss/+/stream/status');
       this.logger.log('Connected to MQTT Broker and subscribed to gnss topics');
     });
 
@@ -73,6 +85,7 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
     const segments = topic.split('/');
     const deviceId = segments[1];
     const dataType = segments[2];
+    const subType = segments[3];
 
     switch (dataType) {
       case 'coordinates':
@@ -88,7 +101,35 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
       case 'video':
         await this.forwardMedia(deviceId, dataType, payload);
         break;
+      case 'stream':
+        if (subType === 'status') {
+          await this.handleStreamStatus(deviceId, payload);
+        }
+        break;
     }
+  }
+
+  /**
+   * Publishes a JSON command to an MQTT topic.
+   *
+   * @param topic - Full MQTT topic
+   * @param value - JSON-serializable command payload
+   */
+  async publishJson(topic: string, value: Record<string, unknown>): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      this.client.publish(
+        topic,
+        JSON.stringify(value),
+        { qos: 1, retain: false },
+        (error?: Error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve();
+        },
+      );
+    });
   }
 
   /**
@@ -249,4 +290,62 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
       },
     ]);
   }
+
+  private async handleStreamStatus(
+    deviceId: string,
+    payload: Buffer,
+  ): Promise<void> {
+    try {
+      const data = JSON.parse(
+        payload.toString(),
+      ) as DeviceStreamStatusPayload;
+      const key = `live-stream:${deviceId}`;
+      const existing = await this.redisService.get(key);
+      const currentSession = existing
+        ? (JSON.parse(existing) as LiveStreamSession)
+        : null;
+
+      if (!currentSession || currentSession.requestId !== data.requestId) {
+        this.logger.warn(
+          `Ignoring stream status for unknown request ${data.requestId} from device ${deviceId}`,
+        );
+        return;
+      }
+
+      const path = this.mediaServerService.buildPath(deviceId);
+      if (data.status === LiveStreamStatus.READY && data.rtspUrl) {
+        await this.mediaServerService.registerRtspSource(path, data.rtspUrl);
+      }
+      const updatedSession: LiveStreamSession = {
+        ...currentSession,
+        status: data.status,
+        rtspUrl: data.rtspUrl ?? currentSession.rtspUrl,
+        webrtcUrl:
+          data.status === LiveStreamStatus.READY
+            ? this.mediaServerService.buildWebRtcUrl(path)
+            : currentSession.webrtcUrl,
+        errorMessage: data.errorMessage,
+      };
+
+      const ttlSeconds = Math.max(
+        Math.ceil(
+          (new Date(updatedSession.expiresAt).getTime() - Date.now()) / 1000,
+        ),
+        60,
+      );
+      await this.redisService.setex(
+        key,
+        ttlSeconds,
+        JSON.stringify(updatedSession),
+      );
+
+      this.logger.log(
+        `Updated live stream session ${data.requestId} for device ${deviceId}: ${data.status}`,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Failed to process stream status: ${message}`);
+    }
+  }
+
 }

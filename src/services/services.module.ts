@@ -5,10 +5,27 @@ import { KafkaModule } from './kafka/kafka.module';
 import { StorageModule } from './storage/storage.module';
 import { SearchModule } from './search/search.module';
 import { MqttModule } from './mqtt/mqtt.module';
+import { MediaServerModule } from './media-server/media-server.module';
 
 @Global()
 @Module({
-  imports: [RedisModule, MailModule, KafkaModule, StorageModule, SearchModule, MqttModule],
-  exports: [RedisModule, MailModule, KafkaModule, StorageModule, SearchModule, MqttModule],
+  imports: [
+    RedisModule,
+    MailModule,
+    KafkaModule,
+    StorageModule,
+    SearchModule,
+    MqttModule,
+    MediaServerModule,
+  ],
+  exports: [
+    RedisModule,
+    MailModule,
+    KafkaModule,
+    StorageModule,
+    SearchModule,
+    MqttModule,
+    MediaServerModule,
+  ],
 })
 export class ServicesModule {}

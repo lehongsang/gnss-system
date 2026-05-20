@@ -10,8 +10,10 @@ import {
 import { BaseEntity } from '@/commons/entities/base.entity';
 import { User } from '@/modules/auth/entities/user.entity';
 import { Device } from '@/modules/devices/entities/device.entity';
+import { GeofenceType } from '@/commons/enums/app.enum';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  IsEnum,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -27,6 +29,20 @@ export class Geofence extends BaseEntity {
   @IsString()
   @MaxLength(255)
   name: string;
+
+  @ApiProperty({
+    enum: GeofenceType,
+    description:
+      'Rule type: allowed_zone means device must stay inside; forbidden_zone means device must stay outside',
+  })
+  @Column({
+    type: 'enum',
+    enum: GeofenceType,
+    nullable: false,
+    default: GeofenceType.ALLOWED_ZONE,
+  })
+  @IsEnum(GeofenceType)
+  type: GeofenceType;
 
   @ApiPropertyOptional({ description: 'Hex color code, e.g. #3b82f6' })
   @Column({ type: 'varchar', nullable: true, default: '#3b82f6' })

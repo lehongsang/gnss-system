@@ -1,5 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { GeofenceType } from '@/commons/enums/app.enum';
 import {
+  IsEnum,
   IsNotEmpty,
   IsObject,
   IsOptional,
@@ -14,6 +16,16 @@ export class CreateGeofenceDto {
   @IsNotEmpty()
   @MaxLength(255)
   name!: string;
+
+  @ApiPropertyOptional({
+    enum: GeofenceType,
+    default: GeofenceType.ALLOWED_ZONE,
+    description:
+      'allowed_zone: device must stay inside; forbidden_zone: device must stay outside',
+  })
+  @IsOptional()
+  @IsEnum(GeofenceType)
+  type?: GeofenceType;
 
   @ApiPropertyOptional({ example: '#3b82f6' })
   @IsOptional()

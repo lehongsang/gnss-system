@@ -37,6 +37,7 @@ export enum AlertType {
   SIGNAL_LOST = 'signal_lost',
   /** Device has exited an assigned geofence boundary */
   GEOFENCE_EXIT = 'geofence_exit',
+  GEOFENCE_ENTRY = 'geofence_entry',
   /** Device is travelling above the allowed speed limit */
   SPEEDING = 'speeding',
 }
@@ -46,6 +47,14 @@ export enum AlertType {
 /**
  * Enum representing the operational status of a device.
  */
+/**
+ * Enum representing the rule type applied to a geofence.
+ */
+export enum GeofenceType {
+  ALLOWED_ZONE = 'allowed_zone',
+  FORBIDDEN_ZONE = 'forbidden_zone',
+}
+
 export enum DeviceStatusEnum {
   ONLINE = 'online',
   OFFLINE = 'offline',

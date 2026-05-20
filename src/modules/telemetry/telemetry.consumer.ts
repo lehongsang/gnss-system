@@ -188,27 +188,32 @@ export class TelemetryConsumer implements OnModuleInit {
     payload: CoordinatePayload,
   ): Promise<void> {
     try {
-      // Find all geofences this device is assigned to, but is currently OUTSIDE of.
-      const violatedGeofences = await this.geofencesService.getViolatedGeofences(
+      // Evaluate assigned geofence rules and return only newly triggered violations.
+      const violations = await this.geofencesService.evaluateGeofenceTransitions(
         deviceId,
         payload.lat,
         payload.lng,
       );
 
-      if (!violatedGeofences || violatedGeofences.length === 0) return;
+      if (!violations || violations.length === 0) return;
 
       // For each violated geofence, check cooldown and trigger alert
-      for (const geofence of violatedGeofences) {
-        const cooldownKey = `geofence_exit:${deviceId}:${geofence.id}`;
+      for (const violation of violations) {
+        const { geofence, alertType } = violation;
+        const cooldownKey = `${alertType}:${deviceId}:${geofence.id}`;
         const alreadyAlerted = await this.redisService.get(cooldownKey);
 
         if (alreadyAlerted) continue; // Alert was already sent recently
 
-        // Create the GEOFENCE_EXIT alert
+        const message =
+          alertType === AlertType.GEOFENCE_EXIT
+            ? `Device exited allowed zone: ${geofence.name}`
+            : `Device entered forbidden zone: ${geofence.name}`;
+
         await this.alertsService.create({
           deviceId,
-          alertType: AlertType.GEOFENCE_EXIT,
-          message: `Cảnh báo! Xe đã di chuyển ra ngoài vùng an toàn: ${geofence.name}`,
+          alertType,
+          message,
           lat: payload.lat,
           lng: payload.lng,
         });
@@ -222,7 +227,7 @@ export class TelemetryConsumer implements OnModuleInit {
         );
 
         this.logger.warn(
-          `GEOFENCE_EXIT detected for device ${deviceId} outside of ${geofence.name}`,
+          `${alertType} detected for device ${deviceId} on geofence ${geofence.name}`,
         );
       }
     } catch (error) {
