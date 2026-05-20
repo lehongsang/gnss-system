@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, Repository } from 'typeorm';
-import { MediaLog } from './entities/media-log.entity';
+import { MediaLog, MediaLogType } from './entities/media-log.entity';
+import { MediaStatus } from '@/services/storage/entities/media.entity';
 import { GetMediaLogsQueryDto } from './dtos/media-log.dto';
 import { NotFound } from '@/commons/exceptions/business.exceptions';
 import { getManyResponse } from '@/utils/getManyResponse';
@@ -41,8 +42,42 @@ export class MediaLogsService {
     return log;
   }
 
+  /**
+   * Create a media log record after a successful presigned URL upload.
+   *
+   * Called when the client confirms that it has finished uploading
+   * the file directly to SeaweedFS via the presigned URL.
+   */
+  async createFromUpload(params: {
+    deviceId: string;
+    fileKey: string;
+    fileUrl: string;
+    timestamp?: string;
+    lat?: number;
+    lng?: number;
+  }): Promise<MediaLog> {
+    const filename = params.fileKey.split('/').pop() || params.fileKey;
+    const startTime = params.timestamp ? new Date(params.timestamp) : new Date();
+
+    const mediaLog = this.mediaLogRepo.create({
+      deviceId: params.deviceId,
+      filename,
+      originalName: filename,
+      mimeType: 'image/jpeg',
+      size: 0,  // Size unknown in presigned URL flow (file bypasses backend)
+      s3Key: params.fileKey,
+      url: params.fileUrl,
+      status: MediaStatus.COMPLETED,
+      startTime,
+      mediaType: MediaLogType.IMAGE_FRAME,
+    });
+
+    return this.mediaLogRepo.save(mediaLog);
+  }
+
   async remove(id: string): Promise<void> {
     await this.findOne(id);
     await this.mediaLogRepo.delete(id);
   }
 }
+

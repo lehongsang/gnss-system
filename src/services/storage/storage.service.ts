@@ -8,6 +8,7 @@ import {
   PutObjectCommand,
   DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { ConfigService } from '@nestjs/config';
 import * as sharp from 'sharp';
 import * as path from 'path';
@@ -279,5 +280,52 @@ export class StorageService implements OnModuleInit {
         status: MediaStatus.FAILED,
       });
     }
+  }
+
+  /**
+   * Generate a Presigned PUT URL for direct-to-storage uploads.
+   *
+   * The client (IoT device or mobile app) will use this URL to upload
+   * files directly to SeaweedFS, bypassing the NestJS backend entirely.
+   *
+   * @param deviceId Device UUID — used to namespace the file path.
+   * @param filename Original file name from the client.
+   * @param mimeType MIME type of the file (e.g. image/jpeg).
+   * @param expiresIn URL validity in seconds (default: 300 = 5 minutes).
+   * @returns Object containing the uploadUrl, fileKey, and expiresIn.
+   */
+  async generatePresignedUrl(
+    deviceId: string,
+    filename: string,
+    mimeType = 'image/jpeg',
+    expiresIn = 300,
+  ) {
+    const key = `uploads/devices/${deviceId}/${Date.now()}-${filename}`;
+
+    const command = new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+      ContentType: mimeType,
+    });
+
+    const uploadUrl = await getSignedUrl(this.s3Client, command, {
+      expiresIn,
+    });
+
+    return { uploadUrl, fileKey: key, expiresIn };
+  }
+
+  /**
+   * Construct the public URL for a file stored in SeaweedFS.
+   *
+   * @param fileKey The S3 object key (e.g. uploads/devices/abc/123-photo.jpg).
+   * @returns Full public URL accessible by clients.
+   */
+  getPublicUrl(fileKey: string): string {
+    const publicUrlBase = this.configService.get<string>(
+      'S3_PUBLIC_URL',
+      `http://localhost:8888/buckets/${this.bucket}`,
+    );
+    return `${publicUrlBase}/${fileKey}`;
   }
 }
