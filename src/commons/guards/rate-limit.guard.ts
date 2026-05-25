@@ -48,7 +48,9 @@ export class CustomRateLimitGuard implements CanActivate {
     const identifier = this.getIdentifier(request);
 
     // Use custom key if provided, otherwise fallback to global
-    const throttleKey = decoratorOptions?.key || 'global';
+    const throttleKey =
+      decoratorOptions?.key ||
+      `${context.getClass().name}.${context.getHandler().name}`;
     const key = `throttle:${throttleKey}:${identifier}`;
 
     try {

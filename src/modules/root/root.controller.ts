@@ -12,7 +12,7 @@ export class RootController {
 
   @AllowAnonymous()
   @Get('health')
-  @RateLimit({ limit: 10, ttl: 10000 })
+  @RateLimit({ limit: 10, ttl: 60, key: 'health' })
   getHealth(): Promise<HealthCheckResult> {
     return this.rootService.getHealth();
   }

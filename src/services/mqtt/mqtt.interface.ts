@@ -59,4 +59,8 @@ export interface MqttDeviceStatusPayload {
   batteryLevel: number;
   cameraStatus: boolean;
   gnssStatus: boolean;
+  /** Number of satellites currently tracked by the GNSS receiver */
+  satellitesTracked?: number;
+  /** Signal strength percentage reported by the device (0-100) */
+  signalStrength?: number;
 }

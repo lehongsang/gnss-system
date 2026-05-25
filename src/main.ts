@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import compression from 'compression';
+import { json } from 'express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 
@@ -41,6 +42,7 @@ async function bootstrap() {
 
   // Register correlation ID middleware - Must be before all other middleware for proper tracking
   app.use(correlationIdMiddleware);
+  app.use('/api/mqtt/auth', json({ limit: '10kb' }));
 
   // Configure global guards
   const reflector = app.get<Reflector>(Reflector);

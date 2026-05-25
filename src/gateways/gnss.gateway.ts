@@ -147,6 +147,8 @@ export class GnssGateway implements OnGatewayConnection, OnGatewayDisconnect {
       batteryLevel: number;
       cameraStatus: boolean;
       gnssStatus: boolean;
+      satellitesTracked?: number;
+      signalStrength?: number;
     },
   ): void {
     this.server.to(`device:${deviceId}`).emit('device-status:update', {

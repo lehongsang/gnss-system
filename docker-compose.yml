@@ -283,6 +283,7 @@ services:
       start_period: 10s
     volumes:
       - emqx_data:/opt/emqx/data
+      - ./emqx/emqx.conf:/opt/emqx/etc/emqx.conf:ro
     networks:
       - datn_gnss
 

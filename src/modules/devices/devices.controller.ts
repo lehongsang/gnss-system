@@ -33,7 +33,10 @@ export class DevicesController {
   @Get('mine')
   @Roles(ALL_ROLES)
   @Doc({ summary: 'Role: All - Get my devices' })
-  findMine(@Session() { user }: { user: User }, @Query() query: GetManyBaseQueryParams) {
+  findMine(
+    @Session() { user }: { user: User },
+    @Query() query: GetManyBaseQueryParams,
+  ) {
     return this.devicesService.findMine(user.id, query);
   }
 
@@ -50,6 +53,17 @@ export class DevicesController {
   @Doc({ summary: 'Role: All - Create new device' })
   create(@Body() dto: CreateDeviceDto, @Session() { user }: { user: User }) {
     return this.devicesService.create(dto, user.id);
+  }
+
+  @Post(':id/mqtt-credentials/regenerate')
+  @Roles(ALL_ROLES)
+  @Doc({ summary: 'Role: All - Regenerate MQTT credentials for device' })
+  regenerateMqttCredentials(
+    @Param('id') id: string,
+    @Session() { user }: { user: User },
+  ) {
+    const isAdmin = user.role === Role.ADMIN;
+    return this.devicesService.regenerateMqttCredentials(id, user.id, isAdmin);
   }
 
   @Patch(':id')

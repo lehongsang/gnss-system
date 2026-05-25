@@ -7,7 +7,6 @@ import {
   IsUUID,
   Max,
   MaxLength,
-  Matches,
   Min,
 } from 'class-validator';
 
@@ -17,14 +16,6 @@ export class CreateDeviceDto {
   @IsNotEmpty()
   @MaxLength(255)
   name: string;
-
-  @ApiPropertyOptional({ example: 'AA:BB:CC:DD:EE:FF' })
-  @IsOptional()
-  @IsString()
-  @Matches(/^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/, {
-    message: 'Invalid MAC address format',
-  })
-  macAddress?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

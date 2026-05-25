@@ -6,6 +6,7 @@ import {
   Min,
   Max,
   IsBoolean,
+  IsOptional,
 } from 'class-validator';
 import { DeviceStatusEnum } from '@/commons/enums/app.enum';
 
@@ -31,4 +32,26 @@ export class UpdateDeviceStatusDto {
   @IsNotEmpty()
   @IsBoolean()
   gnssStatus: boolean;
+
+  @ApiProperty({
+    minimum: 0,
+    description: 'Number of satellites currently tracked',
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  satellitesTracked?: number;
+
+  @ApiProperty({
+    minimum: 0,
+    maximum: 100,
+    description: 'Signal strength percentage reported by device',
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  signalStrength?: number;
 }

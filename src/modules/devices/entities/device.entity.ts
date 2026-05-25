@@ -9,13 +9,13 @@ import { BaseEntity } from '@/commons/entities/base.entity';
 import { User } from '@/modules/auth/entities/user.entity';
 import { DeviceGroup } from '@/modules/device-groups/entities/device-group.entity';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Exclude } from 'class-transformer';
 import {
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
   IsUUID,
-  Matches,
   Max,
   MaxLength,
   Min,
@@ -30,19 +30,35 @@ export class Device extends BaseEntity {
   @MaxLength(255)
   name: string;
 
-  @ApiPropertyOptional({ description: 'MAC address in IEEE format (AA:BB:CC:DD:EE:FF)' })
+  @ApiPropertyOptional({ description: 'MQTT username assigned to this device' })
   @Column({
     type: 'varchar',
     unique: true,
     nullable: true,
-    name: 'mac_address',
+    name: 'mqtt_username',
   })
   @IsOptional()
   @IsString()
-  @Matches(/^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/, {
-    message: 'Invalid MAC address format',
+  mqttUsername: string | null;
+
+  @Exclude()
+  @Column({
+    type: 'varchar',
+    nullable: true,
+    name: 'mqtt_password_hash',
+    select: false,
   })
-  macAddress: string | null;
+  mqttPasswordHash: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Timestamp when MQTT credentials were issued',
+  })
+  @Column({
+    type: 'timestamp',
+    nullable: true,
+    name: 'mqtt_credentials_issued_at',
+  })
+  mqttCredentialsIssuedAt: Date | null;
 
   @ApiPropertyOptional({ description: 'UUID of the user who owns this device' })
   @Column({ type: 'uuid', name: 'owner_id', nullable: true })
@@ -71,7 +87,10 @@ export class Device extends BaseEntity {
   @IsString()
   deviceGroupId: string | null;
 
-  @ManyToOne(() => DeviceGroup, (group) => group.devices, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => DeviceGroup, (group) => group.devices, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
   @JoinColumn({ name: 'device_group_id' })
   group: DeviceGroup;
 

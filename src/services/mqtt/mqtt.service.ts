@@ -218,6 +218,8 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
             batteryLevel: data.batteryLevel,
             cameraStatus: data.cameraStatus,
             gnssStatus: data.gnssStatus,
+            satellitesTracked: data.satellitesTracked,
+            signalStrength: data.signalStrength,
           },
         },
       ]);

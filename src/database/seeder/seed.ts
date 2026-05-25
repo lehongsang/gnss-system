@@ -5,7 +5,13 @@ import { User } from '@/modules/auth/entities/user.entity';
 import { Account } from '@/modules/auth/entities/account.entity';
 import { Device } from '@/modules/devices/entities/device.entity';
 import { Geofence } from '@/modules/geofences/entities/geofence.entity';
-import { Role, DeviceStatusEnum, AccuracyStatus, MediaType, AlertType } from '@/commons/enums/app.enum';
+import {
+  Role,
+  DeviceStatusEnum,
+  AccuracyStatus,
+  MediaType,
+  AlertType,
+} from '@/commons/enums/app.enum';
 import { Logger } from '@nestjs/common';
 import { hashPassword } from 'better-auth/crypto';
 import { v7 as uuidv7 } from 'uuid';
@@ -55,7 +61,9 @@ async function bootstrap() {
   const createdUsers: User[] = [];
 
   for (const userData of usersToSeed) {
-    const existingUser = await userRepo.findOne({ where: { email: userData.email } });
+    const existingUser = await userRepo.findOne({
+      where: { email: userData.email },
+    });
     if (!existingUser) {
       const newUser = userRepo.create({
         id: uuidv7(),
@@ -74,9 +82,9 @@ async function bootstrap() {
         id: uuidv7(),
         user: newUser,
         accountId: newUser.id, // better-auth uses user.id as accountId for credential provider
-        providerId: 'credential', 
+        providerId: 'credential',
         password: hashedPassword,
-      }); 
+      });
       await accountRepo.save(newAccount);
       logger.log(`Created user: ${userData.email}`);
     } else {
@@ -89,17 +97,14 @@ async function bootstrap() {
   const devicesToSeed = [
     {
       name: 'Device A - Tracker',
-      macAddress: '00:1A:2B:3C:4D:5E',
       speedLimitKmh: 80,
     },
     {
       name: 'Device B - Monitor',
-      macAddress: '00:1A:2B:3C:4D:5F',
       speedLimitKmh: 60,
     },
     {
       name: 'Device C - Admin',
-      macAddress: '00:1A:2B:3C:4D:60',
       speedLimitKmh: 100,
     },
   ];
@@ -108,15 +113,19 @@ async function bootstrap() {
 
   for (let i = 0; i < devicesToSeed.length; i++) {
     const deviceData = devicesToSeed[i];
-    const existingDevice = await deviceRepo.findOne({ where: { macAddress: deviceData.macAddress } });
+    const existingDevice = await deviceRepo.findOne({
+      where: { name: deviceData.name },
+    });
     if (!existingDevice) {
       // Assign devices to users: Device A and B to user1, Device C to admin
-      const owner = i < 2 ? createdUsers.find(u => u.email === 'user1@gnss.com') : createdUsers.find(u => u.email === 'admin@gnss.com');
-      
+      const owner =
+        i < 2
+          ? createdUsers.find((u) => u.email === 'user1@gnss.com')
+          : createdUsers.find((u) => u.email === 'admin@gnss.com');
+
       const newDevice = deviceRepo.create({
         id: uuidv7(),
         name: deviceData.name,
-        macAddress: deviceData.macAddress,
         speedLimitKmh: deviceData.speedLimitKmh,
         owner: owner,
       });
@@ -133,12 +142,18 @@ async function bootstrap() {
   const deviceStatusRepo = dataSource.getRepository(DeviceStatus);
   const telemetryRepo = dataSource.getRepository(Telemetry);
 
-  const statuses = [DeviceStatusEnum.ONLINE, DeviceStatusEnum.OFFLINE, DeviceStatusEnum.MAINTENANCE];
+  const statuses = [
+    DeviceStatusEnum.ONLINE,
+    DeviceStatusEnum.OFFLINE,
+    DeviceStatusEnum.MAINTENANCE,
+  ];
   for (let i = 0; i < createdDevices.length; i++) {
     const device = createdDevices[i];
-    
+
     // Status
-    const existingStatus = await deviceStatusRepo.findOne({ where: { deviceId: device.id } });
+    const existingStatus = await deviceStatusRepo.findOne({
+      where: { deviceId: device.id },
+    });
     if (!existingStatus) {
       await deviceStatusRepo.save({
         deviceId: device.id,
@@ -150,14 +165,16 @@ async function bootstrap() {
     }
 
     // Telemetry (Historical Data)
-    const telemetryCount = await telemetryRepo.count({ where: { deviceId: device.id } });
+    const telemetryCount = await telemetryRepo.count({
+      where: { deviceId: device.id },
+    });
     if (telemetryCount < 400) {
       await telemetryRepo.delete({ deviceId: device.id });
       const telemetryPoints = [];
       let currentLat = 21.0285 + (Math.random() * 0.1 - 0.05);
       let currentLng = 105.8542 + (Math.random() * 0.1 - 0.05);
       const currentTime = new Date();
-      
+
       const numPoints = 432;
       for (let j = 0; j < numPoints; j++) {
         telemetryPoints.push({
@@ -177,8 +194,13 @@ async function bootstrap() {
       for (let i = 0; i < telemetryPoints.length; i += 100) {
         await telemetryRepo.save(telemetryPoints.slice(i, i + 100));
       }
-      await dataSource.query(`UPDATE telemetry SET geom = ST_SetSRID(ST_MakePoint(lng, lat), 4326) WHERE device_id = $1 AND geom IS NULL`, [device.id]);
-      logger.log(`Seeded ${numPoints} telemetry points for device ${device.name}`);
+      await dataSource.query(
+        `UPDATE telemetry SET geom = ST_SetSRID(ST_MakePoint(lng, lat), 4326) WHERE device_id = $1 AND geom IS NULL`,
+        [device.id],
+      );
+      logger.log(
+        `Seeded ${numPoints} telemetry points for device ${device.name}`,
+      );
     }
 
     // Media Logs
@@ -188,7 +210,9 @@ async function bootstrap() {
     const currentTime = new Date();
     for (let j = 0; j < 15; j++) {
       const isImage = Math.random() > 0.2;
-      const timestamp = new Date(currentTime.getTime() - Math.random() * 3 * 24 * 3600 * 1000);
+      const timestamp = new Date(
+        currentTime.getTime() - Math.random() * 3 * 24 * 3600 * 1000,
+      );
       mediaLogs.push({
         id: uuidv7(),
         deviceId: device.id,
@@ -196,8 +220,8 @@ async function bootstrap() {
         endTime: timestamp,
         mediaType: isImage ? MediaType.IMAGE_FRAME : MediaType.VIDEO_CHUNK,
         s3Key: `mock/${device.id}-${j}`,
-        fileUrl: isImage 
-          ? `https://loremflickr.com/800/600/street,traffic,car?lock=${Math.floor(Math.random() * 1000)}` 
+        fileUrl: isImage
+          ? `https://loremflickr.com/800/600/street,traffic,car?lock=${Math.floor(Math.random() * 1000)}`
           : 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
       });
     }
@@ -206,9 +230,17 @@ async function bootstrap() {
 
     // Alerts
     const alertRepo = dataSource.getRepository(Alert);
-    const alertCount = await alertRepo.count({ where: { deviceId: device.id } });
+    const alertCount = await alertRepo.count({
+      where: { deviceId: device.id },
+    });
     if (alertCount === 0) {
-      const alertTypes = [AlertType.TRAJECTORY_DEVIATION, AlertType.DANGEROUS_OBSTACLE, AlertType.SIGNAL_LOST, AlertType.GEOFENCE_EXIT, AlertType.SPEEDING];
+      const alertTypes = [
+        AlertType.TRAJECTORY_DEVIATION,
+        AlertType.DANGEROUS_OBSTACLE,
+        AlertType.SIGNAL_LOST,
+        AlertType.GEOFENCE_EXIT,
+        AlertType.SPEEDING,
+      ];
       const alerts = [];
       for (let j = 0; j < 3; j++) {
         alerts.push({
@@ -231,15 +263,18 @@ async function bootstrap() {
   // Only insert if no geofences exist to avoid duplicate polygon issues
   const geofenceCount = await geofenceRepo.count();
   if (geofenceCount === 0) {
-    const adminUser = createdUsers.find(u => u.email === 'admin@gnss.com');
-    const user1 = createdUsers.find(u => u.email === 'user1@gnss.com');
-    
+    const adminUser = createdUsers.find((u) => u.email === 'admin@gnss.com');
+    const user1 = createdUsers.find((u) => u.email === 'user1@gnss.com');
+
     // Sample polygon coordinates in format: SRID=4326;POLYGON((lon lat, lon lat, ...))
-    const hcmPolygon = 'SRID=4326;POLYGON((106.6 10.7, 106.7 10.7, 106.7 10.8, 106.6 10.8, 106.6 10.7))';
-    const hnPolygon = 'SRID=4326;POLYGON((105.8 21.0, 105.9 21.0, 105.9 21.1, 105.8 21.1, 105.8 21.0))';
+    const hcmPolygon =
+      'SRID=4326;POLYGON((106.6 10.7, 106.7 10.7, 106.7 10.8, 106.6 10.8, 106.6 10.7))';
+    const hnPolygon =
+      'SRID=4326;POLYGON((105.8 21.0, 105.9 21.0, 105.9 21.1, 105.8 21.1, 105.8 21.0))';
 
     if (adminUser) {
-      await dataSource.createQueryBuilder()
+      await dataSource
+        .createQueryBuilder()
         .insert()
         .into(Geofence)
         .values({
@@ -250,9 +285,10 @@ async function bootstrap() {
         })
         .execute();
     }
-      
+
     if (user1) {
-      await dataSource.createQueryBuilder()
+      await dataSource
+        .createQueryBuilder()
         .insert()
         .into(Geofence)
         .values({

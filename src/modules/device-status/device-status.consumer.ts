@@ -72,6 +72,8 @@ export class DeviceStatusConsumer implements OnModuleInit {
         batteryLevel: data.batteryLevel,
         cameraStatus: data.cameraStatus,
         gnssStatus: data.gnssStatus,
+        satellitesTracked: data.satellitesTracked,
+        signalStrength: data.signalStrength,
       });
 
       // Step 4: Broadcast status update via WebSocket
@@ -80,6 +82,8 @@ export class DeviceStatusConsumer implements OnModuleInit {
         batteryLevel: data.batteryLevel,
         cameraStatus: data.cameraStatus,
         gnssStatus: data.gnssStatus,
+        satellitesTracked: data.satellitesTracked ?? 0,
+        signalStrength: data.signalStrength ?? 0,
       });
 
       this.logger.log(

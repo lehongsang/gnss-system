@@ -51,15 +51,25 @@ interface GeofenceStateRow {
   is_inside: boolean;
 }
 
-const parseGeom = (geomStr: string | null): { parsedGeom: GeoJSONPolygon | null, paths: { lat: number; lng: number }[], vertexCount: number } => {
+const parseGeom = (
+  geomStr: string | null,
+): {
+  parsedGeom: GeoJSONPolygon | null;
+  paths: { lat: number; lng: number }[];
+  vertexCount: number;
+} => {
   let parsedGeom: GeoJSONPolygon | null = null;
   let paths: { lat: number; lng: number }[] = [];
-  
+
   if (geomStr) {
     try {
       const geojson = JSON.parse(geomStr) as GeoJSONPolygon;
       parsedGeom = geojson;
-      if (geojson.type === 'Polygon' && geojson.coordinates && geojson.coordinates[0]) {
+      if (
+        geojson.type === 'Polygon' &&
+        geojson.coordinates &&
+        geojson.coordinates[0]
+      ) {
         paths = geojson.coordinates[0].map((coord: [number, number]) => ({
           lng: coord[0],
           lat: coord[1],
@@ -69,7 +79,7 @@ const parseGeom = (geomStr: string | null): { parsedGeom: GeoJSONPolygon | null,
       parsedGeom = null;
     }
   }
-  
+
   return {
     parsedGeom,
     paths,
@@ -119,10 +129,13 @@ export class GeofencesService {
       .getRawAndEntities();
 
     const data: EnrichedGeofence[] = entities.map((entity) => {
-      const typedRaw = raw as { geofence_id: string; geofence_geom: string | null }[];
+      const typedRaw = raw as {
+        geofence_id: string;
+        geofence_geom: string | null;
+      }[];
       const rawRow = typedRaw.find((r) => r.geofence_id === entity.id);
       const geomStr = rawRow?.geofence_geom || null;
-      
+
       const { parsedGeom, paths, vertexCount } = parseGeom(geomStr);
 
       return {
@@ -175,7 +188,10 @@ export class GeofencesService {
     return enrichedGeofence;
   }
 
-  async create(dto: CreateGeofenceDto, userId: string): Promise<EnrichedGeofence> {
+  async create(
+    dto: CreateGeofenceDto,
+    userId: string,
+  ): Promise<EnrichedGeofence> {
     const geofence = this.geofenceRepository.create({
       name: dto.name,
       type: dto.type ?? GeofenceType.ALLOWED_ZONE,
@@ -204,7 +220,9 @@ export class GeofencesService {
     const geofence = await this.geofenceRepository.findOne({ where: { id } });
     if (!geofence) throw new NotFoundException('Geofence not found');
     if (!isAdmin && geofence.createdBy !== requesterId) {
-      throw new ForbiddenException('You do not have permission to access this geofence');
+      throw new ForbiddenException(
+        'You do not have permission to access this geofence',
+      );
     }
 
     let isUpdated = false;
@@ -246,7 +264,9 @@ export class GeofencesService {
     if (!geofence) throw new NotFoundException('Geofence not found');
 
     if (!isAdmin && geofence.createdBy !== requesterId) {
-      throw new ForbiddenException('You do not have permission to access this geofence');
+      throw new ForbiddenException(
+        'You do not have permission to access this geofence',
+      );
     }
 
     await this.geofenceRepository.remove(geofence);
@@ -263,13 +283,11 @@ export class GeofencesService {
     });
     if (!geofence) throw new NotFoundException('Geofence not found');
 
-    const device =
-      (await this.devicesService.findByMac(deviceId)) ||
-      (await this.devicesService.findOne(
-        deviceId,
-        geofence.createdBy || '',
-        true,
-      ));
+    const device = await this.devicesService.findOne(
+      deviceId,
+      geofence.createdBy || '',
+      true,
+    );
 
     const exists = geofence.devices.find((d) => d.id === device.id);
     if (!exists) {
@@ -299,7 +317,11 @@ export class GeofencesService {
     lat: number,
     lng: number,
   ): Promise<Geofence[]> {
-    const violations = await this.evaluateGeofenceTransitions(deviceId, lat, lng);
+    const violations = await this.evaluateGeofenceTransitions(
+      deviceId,
+      lat,
+      lng,
+    );
     return violations.map((violation) => violation.geofence);
   }
 

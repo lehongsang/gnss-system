@@ -46,13 +46,14 @@ src/modules/
 ```typescript
 // src/commons/entities/base.entity.ts (ĐÃ CÓ SẴN — chỉ extend, không copy)
 export class BaseEntity {
-  id: string;          // uuid v7, tự generate @BeforeInsert
-  createdAt: Date;     // CURRENT_TIMESTAMP
-  updatedAt: Date;     // @UpdateDateColumn
+  id: string; // uuid v7, tự generate @BeforeInsert
+  createdAt: Date; // CURRENT_TIMESTAMP
+  updatedAt: Date; // @UpdateDateColumn
 }
 ```
 
 **Cách dùng:**
+
 ```typescript
 import { BaseEntity } from '@/commons/entities/base.entity';
 
@@ -70,6 +71,7 @@ export class Device extends BaseEntity {
 > Mọi field trong DTO **phải** có đủ decorator `class-validator` và `@ApiProperty`.
 
 **Validator thường dùng:**
+
 ```typescript
 @IsUUID('7')        // cho id references (dùng uuid v7)
 @IsString()
@@ -88,14 +90,14 @@ export class Device extends BaseEntity {
 
 ### 4. DTOs tái sử dụng từ `@/commons/dtos`
 
-| Class | Mục đích |
-|---|---|
-| `GetManyBaseQueryParams` | Query phân trang: `page`, `limit`, `sortBy`, `sortOrder`, `search` |
-| `GetManyBaseResponseDto<T>` | Response phân trang: `data[]`, `total`, `page`, `limit`, `pageCount` |
-| `GetManyWithStatusQueryParams` | Mở rộng GetManyBase + thêm `status` filter |
-| `DefaultMessageResponseDto` | Response đơn giản: `{ message: string }` |
-| `IdQueryParamDto` | Path param `:id` với `@IsUUID('7')` |
-| `LocationDto` | `{ longitude: number, latitude: number }` |
+| Class                          | Mục đích                                                             |
+| ------------------------------ | -------------------------------------------------------------------- |
+| `GetManyBaseQueryParams`       | Query phân trang: `page`, `limit`, `sortBy`, `sortOrder`, `search`   |
+| `GetManyBaseResponseDto<T>`    | Response phân trang: `data[]`, `total`, `page`, `limit`, `pageCount` |
+| `GetManyWithStatusQueryParams` | Mở rộng GetManyBase + thêm `status` filter                           |
+| `DefaultMessageResponseDto`    | Response đơn giản: `{ message: string }`                             |
+| `IdQueryParamDto`              | Path param `:id` với `@IsUUID('7')`                                  |
+| `LocationDto`                  | `{ longitude: number, latitude: number }`                            |
 
 ### 5. Phân quyền Role
 
@@ -106,6 +108,7 @@ ALL_ROLES   →  [Role.USER, Role.ADMIN]
 ```
 
 **Pattern controller:**
+
 ```typescript
 // Admin: xem tất cả
 @Get()
@@ -168,10 +171,6 @@ export class Device extends BaseEntity {
   name: string;
 
   @ApiProperty({ required: false })
-  @Column({ type: 'varchar', unique: true, nullable: true, name: 'mac_address' })
-  macAddress: string | null;
-
-  @ApiProperty({ required: false })
   @Column({ type: 'uuid', name: 'owner_id', nullable: true })
   ownerId: string | null;
 
@@ -186,7 +185,14 @@ export class Device extends BaseEntity {
 ```typescript
 // create-device.dto.ts
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength, Matches } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  Matches,
+} from 'class-validator';
 
 export class CreateDeviceDto {
   @ApiProperty({ example: 'Drone Camera #01' })
@@ -195,16 +201,10 @@ export class CreateDeviceDto {
   @MaxLength(255)
   name: string;
 
-  @ApiPropertyOptional({ example: 'AA:BB:CC:DD:EE:FF' })
-  @IsOptional()
-  @IsString()
-  @Matches(/^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/, { message: 'Invalid MAC address format' })
-  macAddress?: string;
-
   @ApiPropertyOptional()
   @IsOptional()
   @IsUUID('7')
-  ownerId?: string;  // Chỉ ADMIN mới set được, USER thì tự động lấy session.id
+  ownerId?: string; // Chỉ ADMIN mới set được, USER thì tự động lấy session.id
 }
 
 // update-device.dto.ts
@@ -219,25 +219,39 @@ export class UpdateDeviceDto extends PartialType(CreateDeviceDto) {}
 @Injectable()
 export class DevicesService {
   // ADMIN: lấy tất cả, có phân trang + search theo name
-  async findAll(query: GetManyBaseQueryParams): Promise<GetManyBaseResponseDto<Device>>
+  async findAll(
+    query: GetManyBaseQueryParams,
+  ): Promise<GetManyBaseResponseDto<Device>>;
 
   // USER: chỉ lấy thiết bị của mình
-  async findMine(ownerId: string, query: GetManyBaseQueryParams): Promise<GetManyBaseResponseDto<Device>>
+  async findMine(
+    ownerId: string,
+    query: GetManyBaseQueryParams,
+  ): Promise<GetManyBaseResponseDto<Device>>;
 
   // Cả hai: lấy chi tiết, service tự check ownership nếu là USER
-  async findOne(id: string, requesterId: string, isAdmin: boolean): Promise<Device>
+  async findOne(
+    id: string,
+    requesterId: string,
+    isAdmin: boolean,
+  ): Promise<Device>;
 
   // USER: tạo và tự gán owner = session.id
-  async create(dto: CreateDeviceDto, ownerId: string): Promise<Device>
+  async create(dto: CreateDeviceDto, ownerId: string): Promise<Device>;
 
   // USER có thể sửa device của mình, ADMIN sửa được tất cả
-  async update(id: string, dto: UpdateDeviceDto, requesterId: string, isAdmin: boolean): Promise<Device>
+  async update(
+    id: string,
+    dto: UpdateDeviceDto,
+    requesterId: string,
+    isAdmin: boolean,
+  ): Promise<Device>;
 
   // Chỉ ADMIN
-  async remove(id: string): Promise<DefaultMessageResponseDto>
+  async remove(id: string): Promise<DefaultMessageResponseDto>;
 
-  // Internal — dùng trong MqttService khi device kết nối
-  async findByMac(macAddress: string): Promise<Device | null>
+  // Internal — dùng cho device-facing API theo deviceId
+  async findOneById(id: string): Promise<Device>;
 }
 ```
 
@@ -294,13 +308,20 @@ export class DevicesController {
 > **Lưu ý:** Bảng này dùng `device_id` làm PK (1-1 với Device), **không** extends BaseEntity vì không có `createdAt/updatedAt` theo chuẩn chung.
 
 ```typescript
-import { Column, Entity, JoinColumn, OneToOne, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  JoinColumn,
+  OneToOne,
+  PrimaryColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { Device } from '@/modules/devices/entities/device.entity';
 import { ApiProperty } from '@nestjs/swagger';
 
 export enum DeviceStatusEnum {
-  ONLINE      = 'online',
-  OFFLINE     = 'offline',
+  ONLINE = 'online',
+  OFFLINE = 'offline',
   MAINTENANCE = 'maintenance',
 }
 
@@ -367,13 +388,20 @@ export class UpdateDeviceStatusDto {
 @Injectable()
 export class DeviceStatusService implements OnModuleInit {
   // Kafka consumer — subscribe topic 'gnss.device.status'
-  async onModuleInit(): Promise<void>
+  async onModuleInit(): Promise<void>;
 
   // Lấy trạng thái — USER chỉ xem device của mình
-  async findByDevice(deviceId: string, requesterId: string, isAdmin: boolean): Promise<DeviceStatus>
+  async findByDevice(
+    deviceId: string,
+    requesterId: string,
+    isAdmin: boolean,
+  ): Promise<DeviceStatus>;
 
   // Internal — upsert từ Kafka message
-  async upsert(deviceId: string, dto: UpdateDeviceStatusDto): Promise<DeviceStatus>
+  async upsert(
+    deviceId: string,
+    dto: UpdateDeviceStatusDto,
+  ): Promise<DeviceStatus>;
 }
 ```
 
@@ -392,6 +420,7 @@ async getStatus(@Param('id') id: string, @Session() user: User) { ... }
 
 > [!IMPORTANT]
 > **Bắt buộc** chạy SQL setup sau migrate:
+>
 > ```sql
 > CREATE EXTENSION IF NOT EXISTS postgis;
 > CREATE EXTENSION IF NOT EXISTS timescaledb;
@@ -406,14 +435,21 @@ async getStatus(@Param('id') id: string, @Session() user: User) { ... }
 > **Lưu ý:** Dùng `@PrimaryGeneratedColumn('increment')` (bigserial), **không** extends BaseEntity.
 
 ```typescript
-import { Column, Entity, ManyToOne, JoinColumn, Index, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  ManyToOne,
+  JoinColumn,
+  Index,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { Device } from '@/modules/devices/entities/device.entity';
 import { ApiProperty } from '@nestjs/swagger';
 
 export enum AccuracyStatus {
-  GNSS_ONLY   = 'gnss_only',
+  GNSS_ONLY = 'gnss_only',
   VISION_ONLY = 'vision_only',
-  FUSED       = 'fused',
+  FUSED = 'fused',
 }
 
 @Entity('telemetry')
@@ -444,7 +480,12 @@ export class Telemetry {
   lng: number;
 
   @ApiProperty({ enum: AccuracyStatus, required: false })
-  @Column({ type: 'enum', enum: AccuracyStatus, nullable: true, name: 'accuracy_status' })
+  @Column({
+    type: 'enum',
+    enum: AccuracyStatus,
+    nullable: true,
+    name: 'accuracy_status',
+  })
   accuracyStatus: AccuracyStatus | null;
 
   // geom column được thêm thủ công qua SQL migration (TypeORM không hỗ trợ geometry natively)
@@ -497,24 +538,28 @@ export class NearbyQueryDto {
 export class TelemetryService implements OnModuleInit {
   // Kafka consumer — subscribe 'gnss.coordinates'
   // Sau khi lưu, check geofence và tạo Alert nếu cần
-  async onModuleInit(): Promise<void>
+  async onModuleInit(): Promise<void>;
 
   // Lưu điểm GPS (internal, gọi từ Kafka)
-  async savePoint(deviceId: string, payload: CoordinatePayload): Promise<void>
+  async savePoint(deviceId: string, payload: CoordinatePayload): Promise<void>;
 
   // USER chỉ xem history device của mình
   async findHistory(
     deviceId: string,
     query: TelemetryHistoryQueryDto,
     requesterId: string,
-    isAdmin: boolean
-  ): Promise<GetManyBaseResponseDto<Telemetry>>
+    isAdmin: boolean,
+  ): Promise<GetManyBaseResponseDto<Telemetry>>;
 
   // Vị trí mới nhất
-  async findLatest(deviceId: string, requesterId: string, isAdmin: boolean): Promise<Telemetry>
+  async findLatest(
+    deviceId: string,
+    requesterId: string,
+    isAdmin: boolean,
+  ): Promise<Telemetry>;
 
   // PostGIS ST_DWithin — ADMIN only
-  async findNearby(query: NearbyQueryDto): Promise<Telemetry[]>
+  async findNearby(query: NearbyQueryDto): Promise<Telemetry[]>;
 }
 ```
 
@@ -527,17 +572,21 @@ export class TelemetryController {
   // GET /telemetry/:deviceId/history — ALL (USER chỉ xem device mình)
   @Get(':deviceId/history')
   @Roles(ALL_ROLES)
-  async getHistory(@Param('deviceId') deviceId: string, @Query() query: TelemetryHistoryQueryDto, @Session() user: User) { }
+  async getHistory(
+    @Param('deviceId') deviceId: string,
+    @Query() query: TelemetryHistoryQueryDto,
+    @Session() user: User,
+  ) {}
 
   // GET /telemetry/:deviceId/latest — ALL
   @Get(':deviceId/latest')
   @Roles(ALL_ROLES)
-  async getLatest(@Param('deviceId') deviceId: string, @Session() user: User) { }
+  async getLatest(@Param('deviceId') deviceId: string, @Session() user: User) {}
 
   // GET /telemetry/nearby — ADMIN only
   @Get('nearby')
   @Roles(Role.ADMIN)
-  async getNearby(@Query() query: NearbyQueryDto) { }
+  async getNearby(@Query() query: NearbyQueryDto) {}
 }
 ```
 
@@ -546,6 +595,7 @@ export class TelemetryController {
 ## 📦 MODULE 4: Geofences (`src/modules/geofences/`)
 
 > [!IMPORTANT]
+>
 > ```sql
 > ALTER TABLE geofences ADD COLUMN IF NOT EXISTS geom geometry(Polygon, 4326) NOT NULL;
 > CREATE INDEX IF NOT EXISTS idx_geofences_geom ON geofences USING GIST (geom);
@@ -554,7 +604,14 @@ export class TelemetryController {
 ### Entity: `Geofence`
 
 ```typescript
-import { Entity, Column, ManyToOne, JoinColumn, ManyToMany, JoinTable } from 'typeorm';
+import {
+  Entity,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  ManyToMany,
+  JoinTable,
+} from 'typeorm';
 import { BaseEntity } from '@/commons/entities/base.entity';
 import { User } from '@/modules/auth/entities/user.entity';
 import { Device } from '@/modules/devices/entities/device.entity';
@@ -601,11 +658,21 @@ export class CreateGeofenceDto {
 
   @ApiProperty({
     description: 'GeoJSON Polygon coordinates',
-    example: { type: 'Polygon', coordinates: [[[106.0, 10.0], [106.5, 10.0], [106.5, 10.5], [106.0, 10.0]]] }
+    example: {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [106.0, 10.0],
+          [106.5, 10.0],
+          [106.5, 10.5],
+          [106.0, 10.0],
+        ],
+      ],
+    },
   })
   @IsNotEmpty()
   @IsObject()
-  geom: object;  // GeoJSON Polygon, validate chi tiết bằng custom validator nếu cần
+  geom: object; // GeoJSON Polygon, validate chi tiết bằng custom validator nếu cần
 }
 
 export class AssignDeviceDto {
@@ -622,38 +689,65 @@ export class AssignDeviceDto {
 @Injectable()
 export class GeofencesService {
   // ADMIN: tất cả; USER: của mình (created_by = session.id)
-  async findAll(query: GetManyBaseQueryParams, requesterId: string, isAdmin: boolean): Promise<GetManyBaseResponseDto<Geofence>>
+  async findAll(
+    query: GetManyBaseQueryParams,
+    requesterId: string,
+    isAdmin: boolean,
+  ): Promise<GetManyBaseResponseDto<Geofence>>;
 
-  async findOne(id: string, requesterId: string, isAdmin: boolean): Promise<Geofence>
+  async findOne(
+    id: string,
+    requesterId: string,
+    isAdmin: boolean,
+  ): Promise<Geofence>;
 
-  async create(dto: CreateGeofenceDto, userId: string): Promise<Geofence>
+  async create(dto: CreateGeofenceDto, userId: string): Promise<Geofence>;
 
-  async update(id: string, dto: UpdateGeofenceDto, requesterId: string, isAdmin: boolean): Promise<Geofence>
+  async update(
+    id: string,
+    dto: UpdateGeofenceDto,
+    requesterId: string,
+    isAdmin: boolean,
+  ): Promise<Geofence>;
 
-  async remove(id: string, requesterId: string, isAdmin: boolean): Promise<DefaultMessageResponseDto>
+  async remove(
+    id: string,
+    requesterId: string,
+    isAdmin: boolean,
+  ): Promise<DefaultMessageResponseDto>;
 
-  async assignDevice(geofenceId: string, deviceId: string): Promise<DefaultMessageResponseDto>
+  async assignDevice(
+    geofenceId: string,
+    deviceId: string,
+  ): Promise<DefaultMessageResponseDto>;
 
-  async removeDevice(geofenceId: string, deviceId: string): Promise<DefaultMessageResponseDto>
+  async removeDevice(
+    geofenceId: string,
+    deviceId: string,
+  ): Promise<DefaultMessageResponseDto>;
 
   // Internal — dùng trong TelemetryService để check thiết bị có trong vùng ko
   // PostGIS: ST_Within(ST_SetSRID(ST_MakePoint(:lng, :lat), 4326), geom)
-  async getViolatedGeofences(deviceId: string, lat: number, lng: number): Promise<Geofence[]>
+  async getViolatedGeofences(
+    deviceId: string,
+    lat: number,
+    lng: number,
+  ): Promise<Geofence[]>;
 }
 ```
 
 ### Controller Endpoints
 
-| Method | Path | Role | Mô tả |
-|---|---|---|---|
-| GET | `/geofences` | ADMIN | Tất cả geofence (phân trang) |
-| GET | `/geofences/mine` | ALL | Geofence của mình |
-| GET | `/geofences/:id` | ALL | Chi tiết (ownership check) |
-| POST | `/geofences` | ALL | Tạo geofence |
-| PATCH | `/geofences/:id` | ALL | Cập nhật (ownership check) |
-| DELETE | `/geofences/:id` | ALL | Xóa (ownership check) |
-| POST | `/geofences/:id/devices` | ALL | Gán device (kèm `body: AssignDeviceDto`) |
-| DELETE | `/geofences/:id/devices/:deviceId` | ALL | Gỡ device |
+| Method | Path                               | Role  | Mô tả                                    |
+| ------ | ---------------------------------- | ----- | ---------------------------------------- |
+| GET    | `/geofences`                       | ADMIN | Tất cả geofence (phân trang)             |
+| GET    | `/geofences/mine`                  | ALL   | Geofence của mình                        |
+| GET    | `/geofences/:id`                   | ALL   | Chi tiết (ownership check)               |
+| POST   | `/geofences`                       | ALL   | Tạo geofence                             |
+| PATCH  | `/geofences/:id`                   | ALL   | Cập nhật (ownership check)               |
+| DELETE | `/geofences/:id`                   | ALL   | Xóa (ownership check)                    |
+| POST   | `/geofences/:id/devices`           | ALL   | Gán device (kèm `body: AssignDeviceDto`) |
+| DELETE | `/geofences/:id/devices/:deviceId` | ALL   | Gỡ device                                |
 
 ---
 
@@ -669,10 +763,10 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export enum AlertType {
   TRAJECTORY_DEVIATION = 'trajectory_deviation',
-  DANGEROUS_OBSTACLE   = 'dangerous_obstacle',
-  SIGNAL_LOST          = 'signal_lost',
-  GEOFENCE_EXIT        = 'geofence_exit',
-  SPEEDING             = 'speeding',
+  DANGEROUS_OBSTACLE = 'dangerous_obstacle',
+  SIGNAL_LOST = 'signal_lost',
+  GEOFENCE_EXIT = 'geofence_exit',
+  SPEEDING = 'speeding',
 }
 
 @Entity('alerts')
@@ -687,7 +781,12 @@ export class Alert extends BaseEntity {
   device: Device;
 
   @ApiProperty({ enum: AlertType })
-  @Column({ type: 'enum', enum: AlertType, name: 'alert_type', nullable: false })
+  @Column({
+    type: 'enum',
+    enum: AlertType,
+    name: 'alert_type',
+    nullable: false,
+  })
   alertType: AlertType;
 
   @ApiProperty({ required: false })
@@ -768,29 +867,41 @@ export class CreateAlertDto {
 @Injectable()
 export class AlertsService implements OnModuleInit {
   // Kafka consumer — subscribe 'gnss.alerts'
-  async onModuleInit(): Promise<void>
+  async onModuleInit(): Promise<void>;
 
   // ADMIN: tất cả; USER: chỉ alert của device mình sở hữu
-  async findAll(query: AlertQueryDto, requesterId: string, isAdmin: boolean): Promise<GetManyBaseResponseDto<Alert>>
+  async findAll(
+    query: AlertQueryDto,
+    requesterId: string,
+    isAdmin: boolean,
+  ): Promise<GetManyBaseResponseDto<Alert>>;
 
-  async findOne(id: string, requesterId: string, isAdmin: boolean): Promise<Alert>
+  async findOne(
+    id: string,
+    requesterId: string,
+    isAdmin: boolean,
+  ): Promise<Alert>;
 
   // Đánh dấu đã xử lý — ownership check
-  async resolve(id: string, requesterId: string, isAdmin: boolean): Promise<Alert>
+  async resolve(
+    id: string,
+    requesterId: string,
+    isAdmin: boolean,
+  ): Promise<Alert>;
 
   // Internal — gọi từ Kafka consumer hoặc TelemetryService
-  async create(dto: CreateAlertDto): Promise<Alert>
+  async create(dto: CreateAlertDto): Promise<Alert>;
 }
 ```
 
 ### Controller Endpoints
 
-| Method | Path | Role | Mô tả |
-|---|---|---|---|
-| GET | `/alerts` | ADMIN | Tất cả cảnh báo (phân trang + filter) |
-| GET | `/alerts/mine` | ALL | Cảnh báo của device mình sở hữu |
-| GET | `/alerts/:id` | ALL | Chi tiết (ownership check) |
-| PATCH | `/alerts/:id/resolve` | ALL | Đánh dấu đã xử lý |
+| Method | Path                  | Role  | Mô tả                                 |
+| ------ | --------------------- | ----- | ------------------------------------- |
+| GET    | `/alerts`             | ADMIN | Tất cả cảnh báo (phân trang + filter) |
+| GET    | `/alerts/mine`        | ALL   | Cảnh báo của device mình sở hữu       |
+| GET    | `/alerts/:id`         | ALL   | Chi tiết (ownership check)            |
+| PATCH  | `/alerts/:id/resolve` | ALL   | Đánh dấu đã xử lý                     |
 
 ---
 
@@ -805,8 +916,8 @@ import { Device } from '@/modules/devices/entities/device.entity';
 import { ApiProperty } from '@nestjs/swagger';
 
 export enum MediaType {
-  VIDEO_CHUNK  = 'video_chunk',
-  IMAGE_FRAME  = 'image_frame',
+  VIDEO_CHUNK = 'video_chunk',
+  IMAGE_FRAME = 'image_frame',
 }
 
 @Entity('media_logs')
@@ -872,29 +983,41 @@ export class MediaLogQueryDto extends GetManyBaseQueryParams {
 export class MediaLogsService implements OnModuleInit {
   // Kafka consumer — subscribe 'gnss.media.upload'
   // StorageService upload file lên S3 → lưu metadata vào đây
-  async onModuleInit(): Promise<void>
+  async onModuleInit(): Promise<void>;
 
   // ADMIN: tất cả; USER: device của mình
-  async findAll(query: MediaLogQueryDto, requesterId: string, isAdmin: boolean): Promise<GetManyBaseResponseDto<MediaLog>>
+  async findAll(
+    query: MediaLogQueryDto,
+    requesterId: string,
+    isAdmin: boolean,
+  ): Promise<GetManyBaseResponseDto<MediaLog>>;
 
-  async findOne(id: string, requesterId: string, isAdmin: boolean): Promise<MediaLog>
+  async findOne(
+    id: string,
+    requesterId: string,
+    isAdmin: boolean,
+  ): Promise<MediaLog>;
 
   // Tạo presigned URL để stream/download
-  async getStreamUrl(id: string, requesterId: string, isAdmin: boolean): Promise<{ url: string }>
+  async getStreamUrl(
+    id: string,
+    requesterId: string,
+    isAdmin: boolean,
+  ): Promise<{ url: string }>;
 
   // Internal
-  async create(data: Partial<MediaLog>): Promise<MediaLog>
+  async create(data: Partial<MediaLog>): Promise<MediaLog>;
 }
 ```
 
 ### Controller Endpoints
 
-| Method | Path | Role | Mô tả |
-|---|---|---|---|
-| GET | `/media-logs` | ADMIN | Tất cả media log (phân trang + filter) |
-| GET | `/media-logs/mine` | ALL | Media log của device mình |
-| GET | `/media-logs/:id` | ALL | Chi tiết |
-| GET | `/media-logs/:id/stream` | ALL | Lấy presigned URL để xem |
+| Method | Path                     | Role  | Mô tả                                  |
+| ------ | ------------------------ | ----- | -------------------------------------- |
+| GET    | `/media-logs`            | ADMIN | Tất cả media log (phân trang + filter) |
+| GET    | `/media-logs/mine`       | ALL   | Media log của device mình              |
+| GET    | `/media-logs/:id`        | ALL   | Chi tiết                               |
+| GET    | `/media-logs/:id/stream` | ALL   | Lấy presigned URL để xem               |
 
 ---
 
@@ -930,9 +1053,15 @@ import { MediaLogsModule } from './media-logs/media-logs.module';
 
 @Module({
   imports: [
-    AuthModule, RootModule, UsersModule,
-    DevicesModule, DeviceStatusModule, TelemetryModule,
-    GeofencesModule, AlertsModule, MediaLogsModule,
+    AuthModule,
+    RootModule,
+    UsersModule,
+    DevicesModule,
+    DeviceStatusModule,
+    TelemetryModule,
+    GeofencesModule,
+    AlertsModule,
+    MediaLogsModule,
   ],
 })
 export class CombineModule {}

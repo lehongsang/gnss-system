@@ -65,6 +65,31 @@ export class DeviceStatus {
   @IsBoolean()
   gnssStatus: boolean;
 
+  @ApiProperty({ description: 'Number of satellites currently tracked' })
+  @Column({
+    type: 'integer',
+    nullable: false,
+    default: 0,
+    name: 'satellites_tracked',
+  })
+  @IsNotEmpty()
+  @IsNumber()
+  @Min(0)
+  satellitesTracked: number;
+
+  @ApiProperty({ description: 'Signal strength percentage reported by device (0-100)' })
+  @Column({
+    type: 'integer',
+    nullable: false,
+    default: 0,
+    name: 'signal_strength',
+  })
+  @IsNotEmpty()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  signalStrength: number;
+
   @ApiProperty({ description: 'Timestamp of the last status update' })
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;

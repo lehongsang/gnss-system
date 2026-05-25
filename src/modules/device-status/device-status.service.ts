@@ -40,6 +40,8 @@ export class DeviceStatusService {
         batteryLevel: 0,
         cameraStatus: false,
         gnssStatus: false,
+        satellitesTracked: 0,
+        signalStrength: 0,
       });
       status = await this.deviceStatusRepository.save(status);
     }
@@ -68,6 +70,8 @@ export class DeviceStatusService {
         COALESCE(ds.battery_level, 0) AS "batteryLevel",
         COALESCE(ds.camera_status, false) AS "cameraStatus",
         COALESCE(ds.gnss_status, false) AS "gnssStatus",
+        COALESCE(ds.satellites_tracked, 0) AS "satellitesTracked",
+        COALESCE(ds.signal_strength, 0) AS "signalStrength",
         ds.updated_at AS "updatedAt"
       FROM devices d
       LEFT JOIN device_status ds ON ds.device_id = d.id

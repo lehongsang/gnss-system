@@ -75,6 +75,10 @@ export interface DeviceStatusKafkaPayload {
   cameraStatus: boolean;
   /** Whether the GNSS receiver is operational */
   gnssStatus: boolean;
+  /** Number of satellites currently tracked by the GNSS receiver */
+  satellitesTracked?: number;
+  /** Signal strength percentage reported by the device (0-100) */
+  signalStrength?: number;
   /** ISO 8601 UTC timestamp string */
   timestamp: string;
 }

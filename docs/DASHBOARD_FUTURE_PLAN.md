@@ -49,14 +49,15 @@ Trong do:
 | Khu vuc UI | Trang thai hien tai | Ghi chu |
 | :--- | :--- | :--- |
 | HDOP / VDOP | Chua co field backend | Dang co kha nang mock o frontend |
-| Satellites `12/24` | Chua co field backend | Can them vao telemetry hoac device status |
+| Satellites tracked | Da co field `satellitesTracked` trong status | Chua co tong so ve tinh thay duoc (`satellitesTotal`) |
+| Signal strength | Da co field `signalStrength` trong status | Gia tri 0-100 |
 | Storage used | Dang fix `0` | Chua tinh tu `medias` va `media_logs` |
 | Device name trong status panel | Status API chua tra `device.name` | Frontend phai merge voi API devices hoac backend join san |
 | Media MQTT trong Storage | Tach bang `media_logs` va `medias` | Can API tong hop neu muon hien chung |
 
 ## 4. De xuat mo rong payload MQTT
 
-Co 2 cach dua HDOP / VDOP va satellites vao he thong.
+Co 2 cach dua HDOP / VDOP va tong so ve tinh vao he thong.
 
 ### Phuong an A: Dua vao topic coordinates
 
@@ -76,7 +77,7 @@ Payload de xuat:
   "heading": 270,
   "hdop": 1.5,
   "vdop": 2.0,
-  "satellitesUsed": 12,
+  "satellitesTracked": 12,
   "satellitesTotal": 24,
   "timestamp": "2026-05-20T10:00:00.000Z"
 }
@@ -102,8 +103,9 @@ Payload de xuat:
   "gnssStatus": true,
   "hdop": 1.5,
   "vdop": 2.0,
-  "satellitesUsed": 12,
-  "satellitesTotal": 24
+  "satellitesTracked": 12,
+  "satellitesTotal": 24,
+  "signalStrength": 85
 }
 ```
 
@@ -118,16 +120,22 @@ Neu luu vao `telemetry`, bo sung cac cot:
 ```text
 hdop             float nullable
 vdop             float nullable
-satellites_used  integer nullable
+satellites_tracked integer nullable
 satellites_total integer nullable
 ```
 
-Neu luu vao `device_status`, bo sung cac cot:
+`device_status` hien da co:
+
+```text
+satellites_tracked integer
+signal_strength    integer
+```
+
+Neu mo rong them chat luong GNSS trong `device_status`, bo sung cac cot:
 
 ```text
 hdop             float nullable
 vdop             float nullable
-satellites_used  integer nullable
 satellites_total integer nullable
 ```
 
@@ -188,8 +196,9 @@ Response de xuat:
   "gnssStatus": true,
   "hdop": 1.5,
   "vdop": 2.0,
-  "satellitesUsed": 12,
+  "satellitesTracked": 12,
   "satellitesTotal": 24,
+  "signalStrength": 85,
   "updatedAt": "2026-05-20T10:00:00.000Z"
 }
 ```
@@ -247,4 +256,3 @@ Dashboard duoc coi la het mock khi:
 - Satellites lay tu backend, khong fix cung.
 - Map marker lay tu latest telemetry cua tung thiet bi.
 - Video/anh tu MQTT co the xuat hien trong man hinh Storage neu san pham yeu cau quan ly tap trung.
-

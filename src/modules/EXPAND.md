@@ -7,21 +7,23 @@
 
 ## Tổng quan thay đổi
 
-| # | Tính năng | Loại thay đổi | Độ phức tạp |
-|---|---|---|---|
-| 1 | **WebSocket Realtime Gateway** | Tạo mới module `gateways/` | ⭐⭐ |
-| 2 | **Notification Module (in-app + email)** | Tạo mới module `notifications/` | ⭐⭐ |
-| 3 | **Presigned URL thực sự cho Media** | Sửa entity + service `media-logs/` | ⭐ |
-| 4 | **Server-side Speed Detection** | Sửa entity `devices/` + service `telemetry/` | ⭐ |
+| #   | Tính năng                                | Loại thay đổi                                | Độ phức tạp |
+| --- | ---------------------------------------- | -------------------------------------------- | ----------- |
+| 1   | **WebSocket Realtime Gateway**           | Tạo mới module `gateways/`                   | ⭐⭐        |
+| 2   | **Notification Module (in-app + email)** | Tạo mới module `notifications/`              | ⭐⭐        |
+| 3   | **Presigned URL thực sự cho Media**      | Sửa entity + service `media-logs/`           | ⭐          |
+| 4   | **Server-side Speed Detection**          | Sửa entity `devices/` + service `telemetry/` | ⭐          |
 
 ---
 
 ## 📋 TÍNH NĂNG 1 — WebSocket Realtime Gateway
 
 ### Mục tiêu
+
 Push dữ liệu GPS và cảnh báo realtime xuống frontend thông qua Socket.IO, thay vì client phải polling REST API.
 
 ### Package cần cài
+
 ```bash
 npm install @nestjs/websockets @nestjs/platform-socket.io socket.io
 npm install --save-dev @types/socket.io
@@ -82,16 +84,29 @@ export class GnssGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   // Gọi từ TelemetryService sau khi savePoint()
-  broadcastTelemetry(deviceId: string, data: {
-    lat: number; lng: number; timestamp: Date; speed?: number;
-  }) {
+  broadcastTelemetry(
+    deviceId: string,
+    data: {
+      lat: number;
+      lng: number;
+      timestamp: Date;
+      speed?: number;
+    },
+  ) {
     this.server.to(`device:${deviceId}`).emit('telemetry:update', data);
   }
 
   // Gọi từ AlertsService sau khi create()
-  broadcastAlert(deviceOwnerId: string, alert: {
-    id: string; alertType: string; message: string | null; lat: number | null; lng: number | null;
-  }) {
+  broadcastAlert(
+    deviceOwnerId: string,
+    alert: {
+      id: string;
+      alertType: string;
+      message: string | null;
+      lat: number | null;
+      lng: number | null;
+    },
+  ) {
     // Push vào room của owner (user subscribe room cá nhân khi login)
     this.server.to(`user:${deviceOwnerId}`).emit('alert:new', alert);
   }
@@ -123,7 +138,7 @@ import { GnssGateway } from './gnss.gateway';
 
 @Module({
   providers: [GnssGateway],
-  exports: [GnssGateway],   // Export để inject vào TelemetryService và AlertsService
+  exports: [GnssGateway], // Export để inject vào TelemetryService và AlertsService
 })
 export class GnssGatewayModule {}
 ```
@@ -139,7 +154,7 @@ import { GnssGatewayModule } from './gateways/gnss.gateway.module';
 imports: [
   // ... existing imports ...
   GnssGatewayModule,
-]
+];
 ```
 
 #### `src/modules/telemetry/telemetry.module.ts` — THÊM import
@@ -148,8 +163,8 @@ imports: [
 imports: [
   TypeOrmModule.forFeature([Telemetry]),
   DevicesModule,
-  GnssGatewayModule,  // ← THÊM
-]
+  GnssGatewayModule, // ← THÊM
+];
 ```
 
 #### `src/modules/telemetry/telemetry.service.ts` — SỬA `savePoint()`
@@ -183,8 +198,8 @@ async savePoint(deviceId: string, payload: CoordinatePayload): Promise<void> {
 imports: [
   TypeOrmModule.forFeature([Alert]),
   DevicesModule,
-  GnssGatewayModule,  // ← THÊM
-]
+  GnssGatewayModule, // ← THÊM
+];
 ```
 
 #### `src/modules/alerts/alerts.service.ts` — SỬA `create()`
@@ -204,8 +219,7 @@ async create(dto: CreateAlertDto): Promise<Alert> {
 
   // ← THÊM: Lấy ownerId của device để push về đúng user
   if (saved.deviceId) {
-    const device = await this.devicesService.findByMac(saved.deviceId)
-      // hoặc dùng deviceRepository.findOne({ where: { id: saved.deviceId } })
+    const device = await this.devicesService.findOneById(saved.deviceId)
     if (device?.ownerId) {
       this.gnssGateway.broadcastAlert(device.ownerId, {
         id: saved.id,
@@ -241,6 +255,7 @@ GNSS Device → MQTT → Kafka(gnss.alerts)
 ## 📋 TÍNH NĂNG 2 — Notification Module (In-app + Email)
 
 ### Mục tiêu
+
 Lưu thông báo vào DB (`notifications` table) và gửi email khi có cảnh báo nghiêm trọng. User có thể đọc inbox thông báo qua API.
 
 ### Cấu trúc file mới
@@ -267,9 +282,9 @@ import { User } from '@/modules/auth/entities/user.entity';
 import { ApiProperty } from '@nestjs/swagger';
 
 export enum NotificationType {
-  ALERT        = 'alert',         // Cảnh báo từ thiết bị
-  SYSTEM       = 'system',        // Thông báo hệ thống
-  GEOFENCE     = 'geofence',      // Vì phạm vùng địa lý
+  ALERT = 'alert', // Cảnh báo từ thiết bị
+  SYSTEM = 'system', // Thông báo hệ thống
+  GEOFENCE = 'geofence', // Vì phạm vùng địa lý
 }
 
 @Entity('notifications')
@@ -388,7 +403,14 @@ export class NotificationsService {
     userId: string,
     query: QueryNotificationDto,
   ): Promise<GetManyBaseResponseDto<Notification>> {
-    const { page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 'DESC', type, isRead } = query;
+    const {
+      page = 1,
+      limit = 20,
+      sortBy = 'createdAt',
+      sortOrder = 'DESC',
+      type,
+      isRead,
+    } = query;
 
     const qb = this.notificationRepo
       .createQueryBuilder('n')
@@ -408,7 +430,9 @@ export class NotificationsService {
 
   // Đánh dấu một notification đã đọc
   async markRead(id: string, userId: string): Promise<Notification> {
-    const notif = await this.notificationRepo.findOne({ where: { id, userId } });
+    const notif = await this.notificationRepo.findOne({
+      where: { id, userId },
+    });
     if (!notif) throw new NotFoundException('Notification not found');
     notif.isRead = true;
     return this.notificationRepo.save(notif);
@@ -425,7 +449,9 @@ export class NotificationsService {
 
   // Đếm chưa đọc (dùng cho badge trên UI)
   async countUnread(userId: string): Promise<{ count: number }> {
-    const count = await this.notificationRepo.count({ where: { userId, isRead: false } });
+    const count = await this.notificationRepo.count({
+      where: { userId, isRead: false },
+    });
     return { count };
   }
 
@@ -524,8 +550,8 @@ imports: [
   TypeOrmModule.forFeature([Alert]),
   DevicesModule,
   GnssGatewayModule,
-  NotificationsModule,  // ← THÊM
-]
+  NotificationsModule, // ← THÊM
+];
 ```
 
 #### `src/modules/alerts/alerts.service.ts` — SỬA `create()` để gọi NotificationsService
@@ -576,8 +602,8 @@ import { NotificationsModule } from './notifications/notifications.module';
 // ...
 imports: [
   // ... existing ...
-  NotificationsModule,  // ← THÊM
-]
+  NotificationsModule, // ← THÊM
+];
 ```
 
 ---
@@ -585,10 +611,12 @@ imports: [
 ## 📋 TÍNH NĂNG 3 — Presigned URL thực sự cho Media Stream
 
 ### Vấn đề hiện tại
+
 `MediaLog.fileUrl` chứa URL tĩnh, nhưng SeaweedFS dùng **private bucket** → URL đó không truy cập được trực tiếp.
 `getStreamUrl()` trả thẳng `log.fileUrl` — là placeholder chưa hoạt động.
 
 ### Giải pháp
+
 1. Thêm cột `s3Key` vào `MediaLog` entity để lưu object key trong S3
 2. Inject `StorageService` vào `MediaLogsService`
 3. `getStreamUrl()` gọi `StorageService.getPresignedUrl(s3Key)`
@@ -690,9 +718,11 @@ async getStreamUrl(@Param('id') id: string, @Session() user: User) {
 ## 📋 TÍNH NĂNG 4 — Server-side Speed Detection
 
 ### Mục tiêu
+
 Hệ thống tự động phát hiện vượt tốc và tạo `Alert` mà không cần device tự báo cáo.
 
 ### Cơ chế
+
 - Thêm cột `speedLimitKmh` vào `Device` entity (user tự set ngưỡng tốc độ cho từng thiết bị)
 - Sau khi lưu `Telemetry.savePoint()`, nếu `payload.speed > device.speedLimitKmh` → tạo Alert
 
@@ -709,7 +739,8 @@ export class Device extends BaseEntity {
   @ApiProperty({
     required: false,
     example: 80,
-    description: 'Ngưỡng tốc độ tối đa (km/h). Nếu null = không giám sát tốc độ.',
+    description:
+      'Ngưỡng tốc độ tối đa (km/h). Nếu null = không giám sát tốc độ.',
   })
   @Column({ type: 'float', nullable: true, name: 'speed_limit_kmh' })
   speedLimitKmh: number | null;
@@ -856,33 +887,33 @@ export class TelemetryService implements OnModuleInit {
 
 ### File TẠO MỚI
 
-| File | Mục đích |
-|---|---|
-| `src/gateways/gnss.gateway.ts` | WebSocket gateway — broadcast telemetry & alerts |
-| `src/gateways/gnss.gateway.module.ts` | Module export GnssGateway |
-| `src/modules/notifications/entities/notification.entity.ts` | Bảng notifications |
-| `src/modules/notifications/dtos/query-notification.dto.ts` | Query DTO |
-| `src/modules/notifications/notifications.service.ts` | Logic tạo, query, đánh dấu đọc |
-| `src/modules/notifications/notifications.controller.ts` | API endpoints |
-| `src/modules/notifications/notifications.module.ts` | Module config |
-| `src/services/mail/templates/alert.hbs` | Email template cảnh báo |
+| File                                                        | Mục đích                                         |
+| ----------------------------------------------------------- | ------------------------------------------------ |
+| `src/gateways/gnss.gateway.ts`                              | WebSocket gateway — broadcast telemetry & alerts |
+| `src/gateways/gnss.gateway.module.ts`                       | Module export GnssGateway                        |
+| `src/modules/notifications/entities/notification.entity.ts` | Bảng notifications                               |
+| `src/modules/notifications/dtos/query-notification.dto.ts`  | Query DTO                                        |
+| `src/modules/notifications/notifications.service.ts`        | Logic tạo, query, đánh dấu đọc                   |
+| `src/modules/notifications/notifications.controller.ts`     | API endpoints                                    |
+| `src/modules/notifications/notifications.module.ts`         | Module config                                    |
+| `src/services/mail/templates/alert.hbs`                     | Email template cảnh báo                          |
 
 ### File SỬA
 
-| File | Thay đổi |
-|---|---|
-| `src/app.module.ts` | Import `GnssGatewayModule` |
-| `src/modules/combine.module.ts` | Import `NotificationsModule` |
-| `src/modules/telemetry/telemetry.module.ts` | Import `GnssGatewayModule`, `AlertsModule` |
-| `src/modules/telemetry/telemetry.service.ts` | Implement Kafka consumer + speed detection + WS broadcast |
-| `src/modules/alerts/alerts.module.ts` | Import `GnssGatewayModule`, `NotificationsModule` |
-| `src/modules/alerts/alerts.service.ts` | `create()` gọi WS broadcast + notification |
-| `src/modules/devices/entities/device.entity.ts` | Thêm cột `speedLimitKmh` |
-| `src/modules/devices/dtos/create-device.dto.ts` | Thêm field `speedLimitKmh` |
-| `src/modules/media-logs/entities/media-log.entity.ts` | Thêm cột `s3Key` |
-| `src/modules/media-logs/media-logs.module.ts` | Import `StorageModule` |
-| `src/modules/media-logs/media-logs.service.ts` | `getStreamUrl()` dùng presigned URL thực |
-| `src/services/mail/mail.service.ts` | Thêm method `sendAlertEmail()` |
+| File                                                  | Thay đổi                                                  |
+| ----------------------------------------------------- | --------------------------------------------------------- |
+| `src/app.module.ts`                                   | Import `GnssGatewayModule`                                |
+| `src/modules/combine.module.ts`                       | Import `NotificationsModule`                              |
+| `src/modules/telemetry/telemetry.module.ts`           | Import `GnssGatewayModule`, `AlertsModule`                |
+| `src/modules/telemetry/telemetry.service.ts`          | Implement Kafka consumer + speed detection + WS broadcast |
+| `src/modules/alerts/alerts.module.ts`                 | Import `GnssGatewayModule`, `NotificationsModule`         |
+| `src/modules/alerts/alerts.service.ts`                | `create()` gọi WS broadcast + notification                |
+| `src/modules/devices/entities/device.entity.ts`       | Thêm cột `speedLimitKmh`                                  |
+| `src/modules/devices/dtos/create-device.dto.ts`       | Thêm field `speedLimitKmh`                                |
+| `src/modules/media-logs/entities/media-log.entity.ts` | Thêm cột `s3Key`                                          |
+| `src/modules/media-logs/media-logs.module.ts`         | Import `StorageModule`                                    |
+| `src/modules/media-logs/media-logs.service.ts`        | `getStreamUrl()` dùng presigned URL thực                  |
+| `src/services/mail/mail.service.ts`                   | Thêm method `sendAlertEmail()`                            |
 
 ---
 
