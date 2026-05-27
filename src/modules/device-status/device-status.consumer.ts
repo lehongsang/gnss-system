@@ -5,8 +5,8 @@ import { GnssGateway } from '@/gateways/gnss.gateway';
 import { EachMessageHandler } from 'kafkajs';
 import { KafkaConsumerGroup, KafkaTopic } from '@/services/kafka/kafka.enum';
 import { LoggerService } from '@/commons/logger/logger.service';
-import type { DeviceStatusKafkaPayload } from '@/commons/interfaces/app.interface';
-import { DeviceStatusEnum } from '@/commons/enums/app.enum';
+import { PayloadValidator } from '@/utils/payload-validator.util';
+import { DeviceStatusPayloadDto } from './dtos/device-status-payload.dto';
 
 /**
  * Kafka consumer that listens to the GNSS_DEVICE_STATUS topic,
@@ -54,17 +54,12 @@ export class DeviceStatusConsumer implements OnModuleInit {
     const offset = message.offset;
 
     try {
-      // Step 1: Parse the raw Kafka message body
-      const data = JSON.parse(rawValue) as DeviceStatusKafkaPayload;
+      // Step 1: Parse and strictly validate raw Kafka message body using PayloadValidator
+      const rawObject = JSON.parse(rawValue) as unknown;
+      const data = await PayloadValidator.validate(DeviceStatusPayloadDto, rawObject);
 
-      // Step 2: Validate status enum value
-      const status = data.status as DeviceStatusEnum;
-      if (!Object.values(DeviceStatusEnum).includes(status)) {
-        this.logger.warn(
-          `[P:${partition}][Offset:${offset}] Unknown device status: ${data.status}, skipping`,
-        );
-        return;
-      }
+      // Step 2: Extract status
+      const status = data.status;
 
       // Step 3: Upsert the device status
       await this.deviceStatusService.upsert(data.deviceId, {

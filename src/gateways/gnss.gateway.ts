@@ -6,22 +6,26 @@ import {
   OnGatewayDisconnect,
   ConnectedSocket,
   MessageBody,
+  WsException,
 } from '@nestjs/websockets';
+import { UseGuards } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { LoggerService } from '@/commons/logger/logger.service';
+import { WsAuthGuard, AuthenticatedSocket } from '@/commons/guards/ws-auth.guard';
+import { DevicesService } from '@/modules/devices/devices.service';
+import { DataSource } from 'typeorm';
+import { Session } from '@/modules/auth/entities/session.entity';
 
 /**
  * WebSocket gateway for GNSS realtime data streaming.
- *
- * Provides room-based broadcasting for two types of events:
- * - `telemetry:update` — GPS coordinate updates pushed to `device:{deviceId}` rooms
- * - `alert:new` — Device alerts pushed to `user:{userId}` rooms
- *
- * Clients subscribe to specific devices or their user room to receive
- * targeted, low-latency updates instead of polling REST endpoints.
+ * Secured via WsAuthGuard to ensure only authenticated users
+ * can subscribe to device rooms and user-specific alert streams.
  */
 @WebSocketGateway({
-  cors: { origin: '*', credentials: true },
+  cors: {
+    origin: process.env.WS_CORS_ORIGIN || '*',
+    credentials: true,
+  },
   namespace: 'gnss',
   transports: ['websocket', 'polling'],
 })
@@ -31,24 +35,42 @@ export class GnssGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   private readonly logger = new LoggerService(GnssGateway.name);
 
+  constructor(
+    private readonly devicesService: DevicesService,
+    private readonly dataSource: DataSource,
+  ) {}
+
   /**
    * Handles a client subscribing to a specific device's telemetry stream.
-   * The client joins the Socket.IO room `device:{deviceId}` and will receive
-   * all subsequent `telemetry:update` events for that device.
+   * Leverages WsAuthGuard for authentication, then strictly validates that
+   * the authenticated user is the owner or an admin of the requested device.
    *
    * @param client - The connected Socket.IO client
    * @param deviceId - UUID of the device to subscribe to
    */
+  @UseGuards(WsAuthGuard)
   @SubscribeMessage('subscribe:device')
-  handleSubscribeDevice(
+  async handleSubscribeDevice(
     @ConnectedSocket() client: Socket,
     @MessageBody() deviceId: string,
-  ): void {
-    void client.join(`device:${deviceId}`);
-    client.emit('subscribed', { deviceId });
-    this.logger.log(
-      `Client ${client.id} subscribed to device:${deviceId}`,
-    );
+  ): Promise<void> {
+    const authClient = client as AuthenticatedSocket;
+    const user = authClient.data.user;
+    if (!user) throw new WsException('Unauthorized');
+    const isAdmin = user.role === 'admin';
+
+    try {
+      // Step-by-step logic: Ownership check using DevicesService.findOne
+      await this.devicesService.findOne(deviceId, user.id, isAdmin);
+
+      await client.join(`device:${deviceId}`);
+      client.emit('subscribed', { deviceId });
+      this.logger.log(
+        `User ${user.id} (${user.role}) successfully subscribed to device:${deviceId}`,
+      );
+    } catch {
+      throw new WsException('Unauthorized: You do not own this device');
+    }
   }
 
   /**
@@ -70,19 +92,28 @@ export class GnssGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   /**
    * Handles a client joining their personal user room for alert notifications.
-   * The client joins `user:{userId}` and will receive `alert:new` events
-   * for all devices they own.
+   * Validates that users can only join their own room, while admins can join any.
    *
    * @param client - The connected Socket.IO client
    * @param userId - UUID of the authenticated user
    */
+  @UseGuards(WsAuthGuard)
   @SubscribeMessage('join:user')
-  handleJoinUser(
+  async handleJoinUser(
     @ConnectedSocket() client: Socket,
     @MessageBody() userId: string,
-  ): void {
-    void client.join(`user:${userId}`);
-    this.logger.log(`Client ${client.id} joined user:${userId}`);
+  ): Promise<void> {
+    const authClient = client as AuthenticatedSocket;
+    const user = authClient.data.user;
+    if (!user) throw new WsException('Unauthorized');
+
+    // Step-by-step logic: Ensure non-admin users can only join their own room
+    if (user.role !== 'admin' && user.id !== userId) {
+      throw new WsException('Unauthorized: Access denied');
+    }
+
+    await client.join(`user:${userId}`);
+    this.logger.log(`User ${user.id} joined user room:${userId}`);
   }
 
   // ─── Broadcast Methods (called by consumers) ──────────────────────────────
@@ -160,10 +191,40 @@ export class GnssGateway implements OnGatewayConnection, OnGatewayDisconnect {
   // ─── Lifecycle Hooks ──────────────────────────────────────────────────────
 
   /**
-   * Logs when a new client connects to the WebSocket gateway.
+   * Handles new connection by logging and performing an early authentication check
+   * if a token is supplied during handshake.
    */
-  handleConnection(client: Socket): void {
+  async handleConnection(client: Socket): Promise<void> {
     this.logger.log(`WS Client connected: ${client.id}`);
+
+    const token = this.extractToken(client);
+    if (token) {
+      try {
+        const session = await this.dataSource.getRepository(Session).findOne({
+          where: { token },
+          relations: ['user'],
+        });
+
+        if (session && session.expiresAt > new Date()) {
+          const authClient = client as AuthenticatedSocket;
+          authClient.data = {
+            ...authClient.data,
+            user: {
+              id: session.user.id,
+              role: session.user.role,
+              email: session.user.email,
+            },
+          };
+          this.logger.log(
+            `WS Client early-authenticated: ${session.user.email} (${client.id})`,
+          );
+        }
+      } catch (err) {
+        this.logger.warn(
+          `Early WS auth warning for client ${client.id}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
   }
 
   /**
@@ -171,5 +232,23 @@ export class GnssGateway implements OnGatewayConnection, OnGatewayDisconnect {
    */
   handleDisconnect(client: Socket): void {
     this.logger.log(`WS Client disconnected: ${client.id}`);
+  }
+
+  /**
+   * Helper method to extract token from handshake options or headers.
+   */
+  private extractToken(client: Socket): string | null {
+    const authHeader: unknown =
+      client.handshake.auth?.token || client.handshake.headers?.authorization;
+
+    if (typeof authHeader !== 'string') {
+      return null;
+    }
+
+    if (authHeader.startsWith('Bearer ')) {
+      return authHeader.substring(7);
+    }
+
+    return authHeader;
   }
 }

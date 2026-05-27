@@ -128,113 +128,114 @@ services:
     networks:
       - datn_gnss
 
-  opensearch:
-    container_name: gnss-opensearch
-    image: opensearchproject/opensearch:2.11.0
-    env_file:
-      - .env
-    environment:
-      - cluster.name=opensearch-cluster
-      - node.name=opensearch-node1
-      - discovery.type=single-node
-      - bootstrap.memory_lock=true
-      - "OPENSEARCH_JAVA_OPTS=-Xms1024m -Xmx1024m"
-      - DISABLE_INSTALL_DEMO_CONFIG=false
-      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_ADMIN_PASSWORD:-admin}
-      - plugins.security.disabled=true
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-      nofile:
-        soft: 65536
-        hard: 65536
-    volumes:
-      - opensearch_data:/usr/share/opensearch/data
-    ports:
-      - "${OPENSEARCH_PORT:-9200}:9200"
-      - "9600:9600"
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -fsS http://localhost:9200/_cluster/health >/dev/null || wget -qO- http://localhost:9200/_cluster/health >/dev/null || exit 1",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-    networks:
-      - datn_gnss
+#  opensearch:
+#    container_name: gnss-opensearch
+#    image: opensearchproject/opensearch:2.11.0
+#    env_file:
+#      - .env
+#    environment:
+#      - cluster.name=opensearch-cluster
+#      - node.name=opensearch-node1
+#      - discovery.type=single-node
+#      - bootstrap.memory_lock=true
+#      - "OPENSEARCH_JAVA_OPTS=-Xms1024m -Xmx1024m"
+#      - DISABLE_INSTALL_DEMO_CONFIG=false
+#      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_ADMIN_PASSWORD:-admin}
+#      - plugins.security.disabled=true
+#    ulimits:
+#      memlock:
+#        soft: -1
+#        hard: -1
+#      nofile:
+#        soft: 65536
+#        hard: 65536
+#    volumes:
+#      - opensearch_data:/usr/share/opensearch/data
+#    ports:
+#      - "${OPENSEARCH_PORT:-9200}:9200"
+#      - "9600:9600"
+#    healthcheck:
+#      test:
+#        [
+#          "CMD-SHELL",
+#          "curl -fsS http://localhost:9200/_cluster/health >/dev/null || wget -qO- http://localhost:9200/_cluster/health >/dev/null || exit 1",
+#        ]
+#      interval: 10s
+#      timeout: 5s
+#      retries: 5
+#      start_period: 20s
+#    networks:
+#      - datn_gnss
+#
+#
+#  opensearch-dashboards:
+#    container_name: gnss-opensearch-dashboards
+#    image: opensearchproject/opensearch-dashboards:2.11.0
+#    env_file:
+#      - .env
+#    volumes:
+#      - ./fluent-bit/opensearch_dashboards.yml:/usr/share/opensearch-dashboards/config/opensearch_dashboards.yml
+#    ports:
+#      - "${DASHBOARDS_PORT:-5601}:5601"
+#    environment:
+#      - OPENSEARCH_HOSTS=https://opensearch:9200
+#      - OPENSEARCH_USERNAME=${OPENSEARCH_ADMIN_USER:-admin}
+#      - OPENSEARCH_PASSWORD=${OPENSEARCH_ADMIN_PASSWORD:-admin}
+#    healthcheck:
+#      test:
+#        [
+#          "CMD-SHELL",
+#          "curl -fsS http://localhost:5601/api/status >/dev/null || wget -qO- http://localhost:5601/api/status >/dev/null || exit 1",
+#        ]
+#      interval: 10s
+#      timeout: 5s
+#      retries: 5
+#      start_period: 20s
+#    networks:
+#      - datn_gnss
 
-  opensearch-dashboards:
-    container_name: gnss-opensearch-dashboards
-    image: opensearchproject/opensearch-dashboards:2.11.0
-    env_file:
-      - .env
-    volumes:
-      - ./fluent-bit/opensearch_dashboards.yml:/usr/share/opensearch-dashboards/config/opensearch_dashboards.yml
-    ports:
-      - "${DASHBOARDS_PORT:-5601}:5601"
-    environment:
-      - OPENSEARCH_HOSTS=https://opensearch:9200
-      - OPENSEARCH_USERNAME=${OPENSEARCH_ADMIN_USER:-admin}
-      - OPENSEARCH_PASSWORD=${OPENSEARCH_ADMIN_PASSWORD:-admin}
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -fsS http://localhost:5601/api/status >/dev/null || wget -qO- http://localhost:5601/api/status >/dev/null || exit 1",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-    networks:
-      - datn_gnss
+#  fluent-bit-shipper:
+#    container_name: gnss-fluent-bit-shipper
+#    image: fluent/fluent-bit:latest
+#    env_file:
+#      - .env
+#    volumes:
+#      - ./fluent-bit/shipper.conf:/fluent-bit/etc/fluent-bit.conf
+#      - ./fluent-bit/parsers.conf:/fluent-bit/etc/parsers.conf
+#      - ./logs:/app/logs:ro
+#    healthcheck:
+#      test: ["CMD-SHELL", "ps aux | grep -q '[f]luent-bit'"]
+#      interval: 10s
+#      timeout: 5s
+#      retries: 5
+#      start_period: 10s
+#    networks:
+#      - datn_gnss
+#    depends_on:
+#      - redpanda
 
-  fluent-bit-shipper:
-    container_name: gnss-fluent-bit-shipper
-    image: fluent/fluent-bit:latest
-    env_file:
-      - .env
-    volumes:
-      - ./fluent-bit/shipper.conf:/fluent-bit/etc/fluent-bit.conf
-      - ./fluent-bit/parsers.conf:/fluent-bit/etc/parsers.conf
-      - ./logs:/app/logs:ro
-    healthcheck:
-      test: ["CMD-SHELL", "ps aux | grep -q '[f]luent-bit'"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    networks:
-      - datn_gnss
-    depends_on:
-      - redpanda
-
-  fluent-bit-indexer:
-    container_name: gnss-fluent-bit-indexer
-    image: fluent/fluent-bit:latest
-    env_file:
-      - .env
-    volumes:
-      - ./fluent-bit/indexer.conf:/fluent-bit/etc/fluent-bit.conf
-      - ./fluent-bit/parsers.conf:/fluent-bit/etc/parsers.conf
-    environment:
-      - OPENSEARCH_ADMIN_USER=${OPENSEARCH_ADMIN_USER:-admin}
-      - OPENSEARCH_ADMIN_PASSWORD=${OPENSEARCH_ADMIN_PASSWORD:-admin}
-    healthcheck:
-      test: ["CMD-SHELL", "ps aux | grep -q '[f]luent-bit'"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    networks:
-      - datn_gnss
-    depends_on:
-      - redpanda
-      - opensearch
+#  fluent-bit-indexer:
+#    container_name: gnss-fluent-bit-indexer
+#    image: fluent/fluent-bit:latest
+#    env_file:
+#      - .env
+#    volumes:
+#      - ./fluent-bit/indexer.conf:/fluent-bit/etc/fluent-bit.conf
+#      - ./fluent-bit/parsers.conf:/fluent-bit/etc/parsers.conf
+#    environment:
+#      - OPENSEARCH_ADMIN_USER=${OPENSEARCH_ADMIN_USER:-admin}
+#      - OPENSEARCH_ADMIN_PASSWORD=${OPENSEARCH_ADMIN_PASSWORD:-admin}
+#    healthcheck:
+#      test: ["CMD-SHELL", "ps aux | grep -q '[f]luent-bit'"]
+#      interval: 10s
+#      timeout: 5s
+#      retries: 5
+#      start_period: 10s
+#    networks:
+#      - datn_gnss
+#    depends_on:
+#      - redpanda
+#      - opensearch
 
   seaweedfs:
     image: chrislusf/seaweedfs:3.59

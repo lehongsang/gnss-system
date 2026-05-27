@@ -29,8 +29,11 @@ export class DeviceStatusService {
     // Step 1: Verify device exists and requester has ownership
     await this.devicesService.findOne(deviceId, requesterId, isAdmin);
 
-    // Step 2: Look up existing status
-    let status = await this.deviceStatusRepository.findOneBy({ deviceId });
+    // Step 2: Look up existing status (fetching device relation for metadata)
+    let status = await this.deviceStatusRepository.findOne({
+      where: { deviceId },
+      relations: ['device'],
+    });
 
     // Step 3: If no status exists, create and persist a default record
     if (!status) {
@@ -44,9 +47,13 @@ export class DeviceStatusService {
         signalStrength: 0,
       });
       status = await this.deviceStatusRepository.save(status);
+      status = await this.deviceStatusRepository.findOne({
+        where: { deviceId },
+        relations: ['device'],
+      });
     }
 
-    return status;
+    return status!;
   }
 
   /**
@@ -54,7 +61,7 @@ export class DeviceStatusService {
    * Used by admin pages that need to display status for every device at once.
    */
   async findAll(): Promise<DeviceStatus[]> {
-    return this.deviceStatusRepository.find();
+    return this.deviceStatusRepository.find({ relations: ['device'] });
   }
 
   /**
@@ -66,6 +73,7 @@ export class DeviceStatusService {
       `
       SELECT
         d.id AS "deviceId",
+        d.name AS "deviceName",
         COALESCE(ds.status, 'offline') AS status,
         COALESCE(ds.battery_level, 0) AS "batteryLevel",
         COALESCE(ds.camera_status, false) AS "cameraStatus",

@@ -60,6 +60,14 @@ export class StorageService {
     });
   }
 
+  getS3Client(): S3Client {
+    return this.s3Client;
+  }
+
+  getBucket(): string {
+    return this.bucket;
+  }
+
 
   async uploadFile(
     file: {
@@ -405,6 +413,30 @@ export class StorageService {
     });
 
     return await this.mediaRepository.save(media);
+  }
+
+  /**
+   * Retrieves metadata (size, contentType) of an object directly from S3.
+   * Helps verify if a tệp tin was successfully uploaded and check its size limits.
+   */
+  async getObjectMetadata(
+    key: string,
+  ): Promise<{ size: number; contentType: string } | null> {
+    try {
+      const { HeadObjectCommand } = await import('@aws-sdk/client-s3');
+      const command = new HeadObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+      });
+      const response = await this.s3Client.send(command);
+      return {
+        size: response.ContentLength || 0,
+        contentType: response.ContentType || '',
+      };
+    } catch (error) {
+      this.logger.error(`Failed to head S3 object: ${key}`, error);
+      return null;
+    }
   }
 
   async getDownloadUrl(id: string, userId: string, isAdmin: boolean) {

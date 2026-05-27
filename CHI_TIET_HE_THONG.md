@@ -1,4 +1,4 @@
-﻿# MQTT channels cho thiết bị
+# MQTT channels cho thiết bị
 
 ## Chủ đề backend subscribe
 - `gnss/+/coordinates`
@@ -255,131 +255,119 @@ Fields:
 - `satellitesTracked`: Số vệ tinh GNSS đang theo dõi (nếu thiết bị gửi được).
 - `signalStrength`: Độ mạnh tín hiệu GNSS theo phần trăm 0-100.
 
-### `gnss/<deviceId>/image`
-Payload JSON:
+#### Cơ chế tự động phát hiện ngoại tuyến (Offline Detector Sweeper)
+- **Chu kỳ quét**: Mỗi 60 giây, một background service (`OfflineDetectorService`) sẽ tự động quét cơ sở dữ liệu để tìm ra các thiết bị đang có trạng thái `online` nhưng đã không gửi bất kỳ bản ghi tọa độ (`coordinates`) hay cập nhật trạng thái (`status`) nào trong vòng **5 phút** (300 giây).
+- **Hành vi**: Thiết bị sẽ bị tự động chuyển sang trạng thái `offline` trong DB và hệ thống sẽ gửi một bản tin cập nhật trạng thái mới nhất tới các client Frontend thông qua WebSocket channel real-time để giao diện lập tiếp phản ánh chính xác trạng thái thiết bị ngoại tuyến.
+- **Tính toán tối ưu**: Khoảng thời gian 5 phút được lựa chọn là khoảng thời gian lý tưởng để đảm bảo hạn chế tối đa các cảnh báo ngoại tuyến giả (false alarm) khi thiết bị đi qua vùng mất sóng tạm thời (ví dụ hầm đường bộ, nhà xe, v.v.) hoặc khi broker MQTT (EMQX) thực hiện khởi động lại/ngắt kết nối tạm thời.
+
+#### Quy chuẩn kiểm duyệt dữ liệu đầu vào nghiêm ngặt (Ingestion Payload Validation)
+Hệ thống sử dụng lớp tiện ích `PayloadValidator` kết hợp `class-validator` DTO để kiểm tra cấu trúc của mọi bản tin nhận về từ MQTT/Kafka trước khi xử lý:
+1. **Bản tin tọa độ (`TelemetryPayloadDto`)**:
+   - `deviceId`: Bắt buộc phải là chuỗi định dạng UUID hợp lệ.
+   - `lat`: Bắt buộc là số thực hợp lệ thuộc phạm vi vĩ độ `[-90, 90]`.
+   - `lng`: Bắt buộc là số thực hợp lệ thuộc phạm vi kinh độ `[-180, 180]`.
+   - `speed`: Bắt buộc là số thực lớn hơn hoặc bằng 0 (km/h).
+   - `heading`: Bắt buộc là số thực nằm trong khoảng `[0, 360]` độ.
+   - `timestamp`: Phải là định dạng ISO 8601 Date String hợp lệ.
+2. **Bản tin trạng thái (`DeviceStatusPayloadDto`)**:
+   - `deviceId`: Định dạng UUID hợp lệ.
+   - `status`: Phải thuộc tập giá trị Enum hợp lệ (`online`, `offline`, `maintenance`).
+   - `batteryLevel`: Số thực nằm trong khoảng `[0, 100]`.
+   - `cameraStatus` và `gnssStatus`: Kiểu boolean bắt buộc (`true` / `false`).
+   - `satellitesTracked`: Số nguyên lớn hơn hoặc bằng 0.
+   - `signalStrength`: Số thực nằm trong khoảng `[0, 100]`.
+- **An toàn bảo mật**: Các payload sai định dạng hoặc bị chèn ép mã độc (SQL injection, XSS) sẽ bị hệ thống từ chối lưu trữ và ghi log cảnh báo chi tiết, bảo vệ vững chắc tính toàn vẹn của cơ sở dữ liệu.
+
+
+### Luồng gửi media (ảnh/video) trực tiếp vào S3/SeaweedFS bằng REST Presigned URL (Có Xác Thực & Giới Hạn)
+Luồng này dùng cho ảnh/snapshot dung lượng lớn hoặc video clip. Thiết bị không gửi bytes media qua MQTT; thay vào đó, thiết bị sử dụng HTTP REST API để yêu cầu presigned URL, thực hiện upload trực tiếp lên S3/SeaweedFS bằng `PUT`, và gọi REST API để xác nhận hoàn tất.
+
+#### Quy trình gồm 3 bước:
+
+#### 1. Thiết bị yêu cầu signed URL qua REST
+Thiết bị thực hiện HTTP request có kèm **HTTP Basic Authentication**:
+- **Endpoint**: `POST /api/media-logs/request-upload-url`
+- **Headers**:
+  - `Content-Type: application/json`
+  - `Authorization: Basic <base64(mqttUsername:mqttPassword)>` (Bắt buộc để xác thực danh tính thiết bị và chống spam chéo ID).
+
+**Payload JSON**:
 ```json
 {
-  "data": "<BASE64_IMAGE_CONTENT>",
+  "deviceId": "019e4a45-b4aa-74ed-b5c2-484b89b18701",
+  "fileExtension": "jpg",
+  "filename": "optional-custom-filename"
+}
+```
+
+*Ghi chú*:
+- `fileExtension` hợp lệ: `jpg`, `jpeg`, `png`, `webp`, `mp4`, `avi`, `mkv`.
+- `filename` là tùy chọn. Nếu không truyền, hệ thống sẽ tự động sinh tên dạng `<timestamp>-<deviceId>`.
+
+**Response JSON**:
+```json
+{
+  "uploadUrl": "http://localhost:8333/gnss-images/media-logs/019e4a45-b4aa-74ed-b5c2-484b89b18701/1748310000000-019e4a45-b4aa-74ed-b5c2-484b89b18701.jpg?X-Amz-Algorithm=...",
+  "s3Key": "media-logs/019e4a45-b4aa-74ed-b5c2-484b89b18701/1748310000000-019e4a45-b4aa-74ed-b5c2-484b89b18701.jpg",
   "mimeType": "image/jpeg",
-  "timestamp": "2026-05-20T10:02:00.000Z",
-  "snapshotId": "snap-001"
+  "expiresIn": 3600
 }
 ```
 
-### Luồng gửi ảnh trực tiếp vào SeaweedFS bằng signed URL
-Luồng này dùng cho ảnh/snapshot dung lượng lớn. Thiết bị không gửi bytes ảnh qua MQTT; MQTT chỉ dùng để xin URL upload và báo kết quả. Bytes ảnh được `PUT` trực tiếp vào SeaweedFS bằng URL có chữ ký do backend cấp.
-
-#### 1. Thiết bị xin signed URL
-Topic thiết bị publish:
-- `gnss/<deviceId>/image/upload/request`
-
-Payload JSON:
-```json
-{
-  "requestId": "upload-<uuid>",
-  "snapshotId": "snap-001",
-  "fileName": "snap-001.jpg",
-  "mimeType": "image/jpeg",
-  "contentLength": 245760,
-  "checksumSha256": "<optional_sha256_hex>",
-  "timestamp": "2026-05-20T10:02:00.000Z"
-}
-```
-
-Fields:
-- `requestId`: ID đối chiếu request/response, do thiết bị tạo.
-- `snapshotId`: ID snapshot để liên kết với alert hoặc sự kiện liên quan.
-- `fileName`: Tên file gốc hoặc tên thiết bị muốn dùng.
-- `mimeType`: MIME type ảnh. Ví dụ: `image/jpeg`, `image/png`.
-- `contentLength`: Kích thước file theo byte, dùng để backend kiểm tra giới hạn.
-- `checksumSha256`: SHA-256 của nội dung file nếu thiết bị tính được.
-- `timestamp`: Thời điểm tạo ảnh, ISO 8601 UTC.
-
-#### 2. Backend trả signed URL cho thiết bị
-Topic backend publish:
-- `gnss/<deviceId>/image/upload/response`
-
-Payload JSON:
-```json
-{
-  "requestId": "upload-<uuid>",
-  "snapshotId": "snap-001",
-  "uploadUrl": "http://seaweedfs:8333/gnss-images/devices/<deviceId>/snap-001.jpg?X-Amz-Algorithm=...",
-  "method": "PUT",
-  "headers": {
-    "Content-Type": "image/jpeg"
-  },
-  "objectKey": "devices/<deviceId>/snap-001.jpg",
-  "bucket": "gnss-images",
-  "expiresAt": "2026-05-20T10:07:00.000Z"
-}
-```
-
-Error payload:
-```json
-{
-  "requestId": "upload-<uuid>",
-  "snapshotId": "snap-001",
-  "status": "error",
-  "errorCode": "UPLOAD_URL_DENIED",
-  "errorMessage": "Invalid content length"
-}
-```
-
-Fields:
-- `uploadUrl`: URL có chữ ký để thiết bị upload trực tiếp vào SeaweedFS S3 API.
-- `method`: HTTP method thiết bị phải dùng, mặc định là `PUT`.
-- `headers`: Các header bắt buộc phải gửi đúng khi upload.
-- `objectKey`: Key của object trong bucket để backend lưu metadata.
-- `bucket`: Bucket SeaweedFS chứa ảnh.
-- `expiresAt`: Thời điểm URL hết hạn. Thiết bị phải upload trước thời điểm này.
-
-#### 3. Thiết bị upload trực tiếp vào SeaweedFS
-Thiết bị gọi HTTP:
+#### 2. Thiết bị upload trực tiếp lên S3 qua presigned URL
+Thiết bị thực hiện một request HTTP `PUT` bằng cách sử dụng `uploadUrl` vừa nhận được (Bước này không cần gửi Authorization header vì chữ ký đã được nhúng sẵn trên URL):
 ```http
 PUT <uploadUrl>
 Content-Type: image/jpeg
 
-<binary image bytes>
+<binary media bytes>
 ```
 
-Yêu cầu:
-- Không gửi ảnh base64 qua MQTT trong luồng này.
-- Phải dùng đúng `method` và `headers` backend trả về.
-- Nếu upload thất bại hoặc URL hết hạn, thiết bị xin signed URL mới bằng `requestId` mới.
-- SeaweedFS trả HTTP `200`, `201`, hoặc `204` được xem là upload thành công.
+*Yêu cầu*:
+- Không mã hóa Base64 hay gửi qua MQTT.
+- Phải gửi đúng header `Content-Type` khớp với `mimeType` mà backend đã chỉ định.
+- S3/SeaweedFS sẽ trả về HTTP `200 OK` (hoặc `201`/`204`) khi upload thành công.
 
-#### 4. Thiết bị báo kết quả upload
-Topic thiết bị publish:
-- `gnss/<deviceId>/image/upload/complete`
+#### 3. Thiết bị xác nhận hoàn tất upload (Confirm Upload)
+Sau khi upload thành công lên storage, thiết bị gọi REST API kèm **HTTP Basic Authentication** để thông báo cho backend kiểm tra tệp tin thực tế và tạo media log record trong database:
+- **Endpoint**: `POST /api/media-logs/confirm-upload`
+- **Headers**:
+  - `Content-Type: application/json`
+  - `Authorization: Basic <base64(mqttUsername:mqttPassword)>` (Bắt buộc để đối sánh bảo mật).
 
-Payload JSON khi thành công:
+**Payload JSON**:
 ```json
 {
-  "requestId": "upload-<uuid>",
-  "snapshotId": "snap-001",
-  "bucket": "gnss-images",
-  "objectKey": "devices/<deviceId>/snap-001.jpg",
-  "mimeType": "image/jpeg",
-  "contentLength": 245760,
-  "checksumSha256": "<optional_sha256_hex>",
-  "uploadedAt": "2026-05-20T10:02:20.000Z"
+  "deviceId": "019e4a45-b4aa-74ed-b5c2-484b89b18701",
+  "s3Key": "media-logs/019e4a45-b4aa-74ed-b5c2-484b89b18701/1748310000000-019e4a45-b4aa-74ed-b5c2-484b89b18701.jpg",
+  "mediaType": "image",
+  "snapshotId": "snap-001"
 }
 ```
 
-Payload JSON khi thất bại:
+*Ghi chú bảo mật nghiêm ngặt từ Backend*:
+- **Kiểm tra file thật**: Backend sẽ gọi S3 API check xem file đã thực sự tồn tại trong S3 chưa. Nếu chưa upload, backend từ chối confirm và trả lỗi `404 Not Found`.
+- **Giới hạn dung lượng**: Enforce size tối đa **10MB** cho ảnh (`image` - tương đương `IMAGE_FRAME` trong DB) và **100MB** cho video (`video` - tương đương `VIDEO_CHUNK` trong DB). Nếu dung lượng vượt hạn mức, backend tự động xóa file trên S3 lập tức và trả lỗi `400 Bad Request`.
+- **Mồ côi**: Nếu file được upload thành công nhưng thiết bị không gọi confirm, hệ thống có background sweeper tự động quét và xóa tệp tin S3 mồ côi này sau 24 giờ.
+- **Phân loại**: `mediaType` hợp lệ gửi lên là `image` hoặc `video`.
+- **Snapshot**: `snapshotId` là tùy chọn, được dùng để liên kết tự động tệp tin đa phương tiện này với cảnh báo có cùng `snapshotId`.
+
+**Response JSON**:
+Trả về record `MediaLog` đã được tạo thành công:
 ```json
 {
-  "requestId": "upload-<uuid>",
-  "snapshotId": "snap-001",
-  "status": "error",
-  "errorCode": "UPLOAD_FAILED",
-  "errorMessage": "SeaweedFS returned HTTP 403",
-  "failedAt": "2026-05-20T10:02:20.000Z"
+  "id": "019e4a45-b4aa-74ed-b5c2-484b89b18702",
+  "createdAt": "2026-05-27T10:44:18.000Z",
+  "updatedAt": "2026-05-27T10:44:18.000Z",
+  "deviceId": "019e4a45-b4aa-74ed-b5c2-484b89b18701",
+  "mediaType": "image_frame",
+  "startTime": "2026-05-27T10:44:18.000Z",
+  "endTime": "2026-05-27T10:44:18.000Z",
+  "s3Key": "media-logs/019e4a45-b4aa-74ed-b5c2-484b89b18701/1748310000000-019e4a45-b4aa-74ed-b5c2-484b89b18701.jpg",
+  "fileUrl": "",
+  "snapshotId": "snap-001"
 }
 ```
-
-Sau khi nhận `image/upload/complete`, backend kiểm tra object trong SeaweedFS, lưu metadata ảnh và liên kết `snapshotId` với alert/sự kiện nếu có.
 
 ### `gnss/<deviceId>/video`
 Payload JSON:

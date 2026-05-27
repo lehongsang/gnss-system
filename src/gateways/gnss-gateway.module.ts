@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { GnssGateway } from './gnss.gateway';
+import { DevicesModule } from '@/modules/devices/devices.module';
 
 /**
  * Module that provides the GnssGateway WebSocket service.
@@ -7,6 +8,7 @@ import { GnssGateway } from './gnss.gateway';
  * realtime events (telemetry, alerts, device status) to connected clients.
  */
 @Module({
+  imports: [DevicesModule],
   providers: [GnssGateway],
   exports: [GnssGateway],
 })

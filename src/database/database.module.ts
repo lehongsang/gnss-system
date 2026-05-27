@@ -25,7 +25,9 @@ import { Pool } from 'pg';
           database: dbConfig.database,
           ssl: dbConfig.ssl,
           entities: [__dirname + '/../**/**/*.entity{.ts,.js}'],
-          synchronize: configService.get<string>('NODE_ENV') !== 'production',
+          migrations: [__dirname + '/migrations/**/*{.ts,.js}'],
+          migrationsRun: true,
+          synchronize: false,
         };
       },
     }),

@@ -34,6 +34,7 @@ export class DashboardService {
       alertStats,
       telemetryPoints,
       telemetryRatePoints,
+      mediaUsedRows,
     ] = await Promise.all([
       this.count(
         `SELECT COUNT(*) AS count FROM devices WHERE owner_id = $1 AND deleted_at IS NULL`,
@@ -74,7 +75,13 @@ export class DashboardService {
         `,
         [userId],
       ),
+      this.dataSource.query<{ size: string }[]>(
+        `SELECT COALESCE(SUM(size), 0) AS size FROM medias WHERE created_by = $1 AND deleted_at IS NULL`,
+        [userId],
+      ),
     ]);
+
+    const mediaUsedBytes = Number(mediaUsedRows[0]?.size ?? 0);
 
     return {
       totalDevices,
@@ -86,7 +93,7 @@ export class DashboardService {
       infoAlerts: Number(alertStats.infoAlerts),
       telemetryPoints,
       telemetryRate: `${telemetryRatePoints}/min`,
-      mediaUsedBytes: 0,
+      mediaUsedBytes,
       mediaTotalBytes,
     };
   }

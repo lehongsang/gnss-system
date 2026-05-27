@@ -2,6 +2,8 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -19,9 +21,13 @@ import { ConfirmUploadDto, ConfirmMediaType } from './dtos/confirm-upload.dto';
 import { MediaType } from './entities/media-log.entity';
 import { LoggerService } from '@/commons/logger/logger.service';
 import { AlertsService } from '@/modules/alerts/alerts.service';
+import {
+  ListObjectsV2Command,
+  DeleteObjectCommand,
+} from '@aws-sdk/client-s3';
 
 @Injectable()
-export class MediaLogsService {
+export class MediaLogsService implements OnModuleInit {
   private readonly logger = new LoggerService(MediaLogsService.name);
 
   constructor(
@@ -198,12 +204,29 @@ export class MediaLogsService {
   }
 
   /**
+   * NestJS module initialization hook.
+   * Starts a background cron-like interval sweeping S3 bucket for orphaned files.
+   */
+  onModuleInit() {
+    // Do not schedule intervals during test runs to prevent Jest open handles leak
+    if (process.env.NODE_ENV === 'test') {
+      return;
+    }
+
+    // Run sweep clean-up 30s after boot, and then every 24 hours
+    setTimeout(() => {
+      this.cleanupOrphanedFiles().catch(() => {});
+    }, 30000);
+    setInterval(() => {
+      this.cleanupOrphanedFiles().catch(() => {});
+    }, 24 * 60 * 60 * 1000);
+  }
+
+  /**
    * Confirms that a device has successfully uploaded a media file to S3
    * using the presigned URL from requestUploadUrl().
    *
-   * This creates the MediaLog database record, completing the upload lifecycle.
-   * The record links the device to the S3 object key so the file can be
-   * retrieved later via presigned GET URLs.
+   * Enforces strict file existence check via S3 HeadObject and size limit validations.
    *
    * @param dto - Contains deviceId, s3Key (from requestUploadUrl), and mediaType
    * @returns The newly created MediaLog record
@@ -212,13 +235,48 @@ export class MediaLogsService {
     // Step 1: Verify the device exists
     await this.devicesService.findOneById(dto.deviceId);
 
-    // Step 2: Map the simple media type to the entity enum
+    // Step 2: Query S3 object metadata to verify the file was actually uploaded and check its size
+    const s3Meta = await this.storageService.getObjectMetadata(dto.s3Key);
+    if (!s3Meta) {
+      throw new NotFoundException(
+        'Uploaded file was not found in storage. Please complete the S3 upload before confirming.',
+      );
+    }
+
+    // Step 3: Enforce strict file size limits
+    // Max 10MB for images, Max 100MB for videos
+    const maxLimit =
+      dto.mediaType === ConfirmMediaType.IMAGE
+        ? 10 * 1024 * 1024 // 10MB
+        : 100 * 1024 * 1024; // 100MB
+
+    if (s3Meta.size > maxLimit) {
+      // Clean up the violating file from S3 immediately
+      try {
+        const s3Client = this.storageService.getS3Client();
+        const bucket = this.storageService.getBucket();
+        await s3Client.send(
+          new DeleteObjectCommand({
+            Bucket: bucket,
+            Key: dto.s3Key,
+          }),
+        );
+      } catch (err) {
+        this.logger.error(`Failed to delete over-sized file: ${dto.s3Key}`, err);
+      }
+
+      throw new BadRequestException(
+        `Uploaded file size (${(s3Meta.size / (1024 * 1024)).toFixed(2)}MB) exceeds the maximum allowed limit for ${dto.mediaType} (${maxLimit / (1024 * 1024)}MB). File has been deleted.`,
+      );
+    }
+
+    // Step 4: Map the simple media type to the entity enum
     const mappedMediaType =
       dto.mediaType === ConfirmMediaType.IMAGE
         ? MediaType.IMAGE_FRAME
         : MediaType.VIDEO_CHUNK;
 
-    // Step 3: Create and persist the media log record
+    // Step 5: Create and persist the media log record
     const log = this.mediaLogRepository.create({
       deviceId: dto.deviceId,
       mediaType: mappedMediaType,
@@ -239,10 +297,63 @@ export class MediaLogsService {
     }
 
     this.logger.log(
-      `Media upload confirmed for device ${dto.deviceId}: ${dto.s3Key} (${dto.mediaType})`,
+      `Media upload confirmed for device ${dto.deviceId}: ${dto.s3Key} (Size: ${(s3Meta.size / 1024).toFixed(1)} KB, Type: ${dto.mediaType})`,
     );
 
     return savedLog;
+  }
+
+  /**
+   * Sweeps the S3 bucket's "media-logs/" prefix, identifying files older than 24 hours
+   * that have no corresponding database record in `media_logs` table, and deletes them.
+   */
+  async cleanupOrphanedFiles(): Promise<void> {
+    this.logger.log('Starting orphaned media files sweep clean-up...');
+    try {
+      const s3Client = this.storageService.getS3Client();
+      const bucket = this.storageService.getBucket();
+
+      const command = new ListObjectsV2Command({
+        Bucket: bucket,
+        Prefix: 'media-logs/',
+      });
+      const response = await s3Client.send(command);
+      const objects = response.Contents || [];
+
+      let deletedCount = 0;
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+      for (const obj of objects) {
+        if (!obj.Key || !obj.LastModified) continue;
+
+        // Only target files older than 24 hours
+        if (obj.LastModified > oneDayAgo) continue;
+
+        // Check if a database entry exists for this s3Key
+        const dbRecord = await this.mediaLogRepository.findOne({
+          where: { s3Key: obj.Key },
+        });
+
+        if (!dbRecord) {
+          this.logger.warn(
+            `Orphaned media file detected in S3: ${obj.Key} (LastModified: ${obj.LastModified.toISOString()}). Deleting...`,
+          );
+          await s3Client.send(
+            new DeleteObjectCommand({
+              Bucket: bucket,
+              Key: obj.Key,
+            }),
+          );
+          deletedCount++;
+        }
+      }
+
+      this.logger.log(
+        `Orphaned media files sweep completed. Deleted ${deletedCount} orphaned file(s).`,
+      );
+    } catch (error) {
+      this.logger.error('Failed to run orphaned files sweep clean-up', error);
+    }
   }
 }
 

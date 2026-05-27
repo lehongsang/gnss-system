@@ -12,6 +12,8 @@ import { LoggerService } from '@/commons/logger/logger.service';
 import { AlertType } from '@/commons/enums/app.enum';
 import type { CoordinatePayload } from '@/commons/interfaces/app.interface';
 import type { AccuracyStatus } from '@/commons/enums/app.enum';
+import { PayloadValidator } from '@/utils/payload-validator.util';
+import { TelemetryPayloadDto } from './dtos/telemetry-payload.dto';
 
 /**
  * Cooldown period (in seconds) between SPEEDING alerts for the same device.
@@ -70,15 +72,9 @@ export class TelemetryConsumer implements OnModuleInit {
     const offset = message.offset;
 
     try {
-      // Step 1: Parse the raw Kafka message body
-      const data = JSON.parse(rawValue) as {
-        deviceId: string;
-        lng: number;
-        lat: number;
-        speed: number;
-        heading: number;
-        timestamp: string;
-      };
+      // Step 1: Parse and strictly validate raw Kafka message body using PayloadValidator DTO
+      const rawObject = JSON.parse(rawValue) as unknown;
+      const data = await PayloadValidator.validate(TelemetryPayloadDto, rawObject);
 
       // Step 2: Build the CoordinatePayload expected by the service
       const payload: CoordinatePayload = {
