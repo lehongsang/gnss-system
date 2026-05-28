@@ -5,10 +5,12 @@ import {
   Logger,
 } from '@nestjs/common';
 import * as mqtt from 'mqtt';
+import { randomUUID } from 'crypto';
 import { KafkaService } from '../kafka/kafka.service';
 import { KafkaTopic } from '@/services/kafka/kafka.enum';
 import { RedisService } from '@/services/redis/redis.service';
 import { MediaServerService } from '@/services/media-server/media-server.service';
+import { GnssKafkaEnvelope } from '@/commons/interfaces/app.interface';
 import {
   DeviceStreamStatusPayload,
   LiveStreamSession,
@@ -144,17 +146,25 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
   ): Promise<void> {
     try {
       const data = JSON.parse(payload.toString()) as MqttCoordinatesPayload;
+      const envelope: GnssKafkaEnvelope = {
+        correlationId: randomUUID(),
+        deviceId,
+        receivedAt: new Date().toISOString(),
+        retryCount: 0,
+        payload: {
+          deviceId,
+          lng: data.lng,
+          lat: data.lat,
+          speed: data.speed,
+          heading: data.heading,
+          timestamp: data.timestamp,
+        },
+      };
+
       await this.kafkaService.produce(KafkaTopic.GNSS_COORDINATES, [
         {
           key: deviceId,
-          value: {
-            deviceId,
-            lng: data.lng,
-            lat: data.lat,
-            speed: data.speed,
-            heading: data.heading,
-            timestamp: data.timestamp,
-          },
+          value: JSON.stringify(envelope),
         },
       ]);
     } catch (e) {
@@ -177,18 +187,26 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
   ): Promise<void> {
     try {
       const data = JSON.parse(payload.toString()) as MqttAlertPayload;
+      const envelope: GnssKafkaEnvelope = {
+        correlationId: randomUUID(),
+        deviceId,
+        receivedAt: new Date().toISOString(),
+        retryCount: 0,
+        payload: {
+          deviceId,
+          type: data.type,
+          severity: data.severity,
+          message: data.message,
+          location: { lng: data.lng, lat: data.lat },
+          timestamp: data.timestamp,
+          snapshotId: data.snapshotId,
+        },
+      };
+
       await this.kafkaService.produce(KafkaTopic.GNSS_ALERTS, [
         {
           key: deviceId,
-          value: {
-            deviceId,
-            type: data.type,
-            severity: data.severity,
-            message: data.message,
-            location: { lng: data.lng, lat: data.lat },
-            timestamp: data.timestamp,
-            snapshotId: data.snapshotId,
-          },
+          value: JSON.stringify(envelope),
         },
       ]);
     } catch (e) {
@@ -209,18 +227,26 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
   ): Promise<void> {
     try {
       const data = JSON.parse(payload.toString()) as MqttDeviceStatusPayload;
+      const envelope: GnssKafkaEnvelope = {
+        correlationId: randomUUID(),
+        deviceId,
+        receivedAt: new Date().toISOString(),
+        retryCount: 0,
+        payload: {
+          deviceId,
+          status: data.status,
+          batteryLevel: data.batteryLevel,
+          cameraStatus: data.cameraStatus,
+          gnssStatus: data.gnssStatus,
+          satellitesTracked: data.satellitesTracked,
+          signalStrength: data.signalStrength,
+        },
+      };
+
       await this.kafkaService.produce(KafkaTopic.GNSS_DEVICE_STATUS, [
         {
           key: deviceId,
-          value: {
-            deviceId,
-            status: data.status,
-            batteryLevel: data.batteryLevel,
-            cameraStatus: data.cameraStatus,
-            gnssStatus: data.gnssStatus,
-            satellitesTracked: data.satellitesTracked,
-            signalStrength: data.signalStrength,
-          },
+          value: JSON.stringify(envelope),
         },
       ]);
     } catch (e) {
@@ -278,17 +304,25 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
       timestamp = new Date().toISOString();
     }
 
+    const envelope: GnssKafkaEnvelope = {
+      correlationId: randomUUID(),
+      deviceId,
+      receivedAt: new Date().toISOString(),
+      retryCount: 0,
+      payload: {
+        deviceId,
+        mediaType,
+        data,
+        mimeType,
+        timestamp,
+        snapshotId,
+      },
+    };
+
     await this.kafkaService.produce(KafkaTopic.GNSS_MEDIA_UPLOAD, [
       {
         key: deviceId,
-        value: {
-          deviceId,
-          mediaType,
-          data,
-          mimeType,
-          timestamp,
-          snapshotId,
-        },
+        value: JSON.stringify(envelope),
       },
     ]);
   }

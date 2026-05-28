@@ -69,7 +69,7 @@ async function bootstrap() {
   // Show Swagger UI in development: http://localhost:3000/api/docs
   const config = new DocumentBuilder()
     .setTitle(APP_NAME)
-    .setDescription('API documentation for the Nest base application.')
+    .setDescription('API documentation for the GNSS System backend.')
     .setVersion('1.0')
     .addBearerAuth(
       {

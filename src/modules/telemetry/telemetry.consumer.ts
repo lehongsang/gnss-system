@@ -5,12 +5,13 @@ import { GnssGateway } from '@/gateways/gnss.gateway';
 import { DevicesService } from '@/modules/devices/devices.service';
 import { AlertsService } from '@/modules/alerts/alerts.service';
 import { GeofencesService } from '@/modules/geofences/geofences.service';
+import { RouteDeviationService } from '@/modules/route-plans/route-deviation.service';
 import { RedisService } from '@/services/redis/redis.service';
 import { EachMessageHandler } from 'kafkajs';
 import { KafkaConsumerGroup, KafkaTopic } from '@/services/kafka/kafka.enum';
 import { LoggerService } from '@/commons/logger/logger.service';
 import { AlertType } from '@/commons/enums/app.enum';
-import type { CoordinatePayload } from '@/commons/interfaces/app.interface';
+import type { CoordinatePayload, GnssKafkaEnvelope } from '@/commons/interfaces/app.interface';
 import type { AccuracyStatus } from '@/commons/enums/app.enum';
 import { PayloadValidator } from '@/utils/payload-validator.util';
 import { TelemetryPayloadDto } from './dtos/telemetry-payload.dto';
@@ -38,6 +39,7 @@ export class TelemetryConsumer implements OnModuleInit {
     private readonly alertsService: AlertsService,
     private readonly redisService: RedisService,
     private readonly geofencesService: GeofencesService,
+    private readonly routeDeviationService: RouteDeviationService,
   ) {}
 
   /**
@@ -72,9 +74,12 @@ export class TelemetryConsumer implements OnModuleInit {
     const offset = message.offset;
 
     try {
-      // Step 1: Parse and strictly validate raw Kafka message body using PayloadValidator DTO
-      const rawObject = JSON.parse(rawValue) as unknown;
-      const data = await PayloadValidator.validate(TelemetryPayloadDto, rawObject);
+      // Step 1: Parse envelope and extract payload
+      const rawObject = JSON.parse(rawValue) as GnssKafkaEnvelope<unknown>;
+      if (!rawObject || !rawObject.payload) {
+        throw new Error('Invalid GnssKafkaEnvelope structure: missing payload');
+      }
+      const data = await PayloadValidator.validate(TelemetryPayloadDto, rawObject.payload);
 
       // Step 2: Build the CoordinatePayload expected by the service
       const payload: CoordinatePayload = {
@@ -104,6 +109,9 @@ export class TelemetryConsumer implements OnModuleInit {
       // Step 6: Server-side geofence detection
       await this.checkGeofenceViolation(data.deviceId, payload);
 
+      // Step 7: Server-side active route deviation detection
+      await this.checkRouteDeviation(data.deviceId, payload);
+
       this.logger.log(
         `[P:${partition}][Offset:${offset}] Saved + broadcast telemetry for device ${data.deviceId}`,
       );
@@ -112,6 +120,30 @@ export class TelemetryConsumer implements OnModuleInit {
         `Failed to process telemetry message at offset ${offset}`,
         error instanceof Error ? error.stack : error,
       );
+
+      // Apply Dead Letter Queue (DLQ)
+      try {
+        const dlqPayload = {
+          originalPayload: rawValue,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          topic: KafkaTopic.GNSS_COORDINATES,
+          partition,
+          offset,
+          failedAt: new Date().toISOString(),
+        };
+
+        await this.kafkaService.produce(KafkaTopic.GNSS_COORDINATES_DLQ, [
+          {
+            key: message.key?.toString(),
+            value: JSON.stringify(dlqPayload),
+          },
+        ]);
+      } catch (dlqError) {
+        this.logger.error(
+          `Failed to publish telemetry failure to DLQ: ${dlqError instanceof Error ? dlqError.message : String(dlqError)}`,
+        );
+      }
     }
   };
 
@@ -232,5 +264,15 @@ export class TelemetryConsumer implements OnModuleInit {
         `Geofence check failed for device ${deviceId}: ${error instanceof Error ? error.message : error}`,
       );
     }
+  }
+
+  /**
+   * Checks whether the device has deviated from its active planned route.
+   */
+  private async checkRouteDeviation(
+    deviceId: string,
+    payload: CoordinatePayload,
+  ): Promise<void> {
+    await this.routeDeviationService.checkDeviation(deviceId, payload);
   }
 }

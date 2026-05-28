@@ -7,7 +7,7 @@ import { MailService } from '@/services/mail/mail.service';
 import { EachMessageHandler } from 'kafkajs';
 import { KafkaConsumerGroup, KafkaTopic } from '@/services/kafka/kafka.enum';
 import { LoggerService } from '@/commons/logger/logger.service';
-import type { AlertKafkaPayload } from '@/commons/interfaces/app.interface';
+import type { AlertKafkaPayload, GnssKafkaEnvelope } from '@/commons/interfaces/app.interface';
 import { AlertType } from '@/commons/enums/app.enum';
 
 /**
@@ -15,11 +15,11 @@ import { AlertType } from '@/commons/enums/app.enum';
  * Maps each AlertType enum value to a human-readable Vietnamese title.
  */
 const ALERT_TITLES: Record<AlertType, string> = {
-  [AlertType.GEOFENCE_EXIT]: '⚠️ Thiết bị thoát khỏi vùng địa lý',
-  [AlertType.SPEEDING]: '🚨 Vượt tốc độ giới hạn',
-  [AlertType.SIGNAL_LOST]: '📡 Mất tín hiệu GPS',
-  [AlertType.DANGEROUS_OBSTACLE]: '🚧 Phát hiện chướng ngại vật',
-  [AlertType.TRAJECTORY_DEVIATION]: '🛤️ Lệch khỏi quỹ đạo',
+  [AlertType.GEOFENCE_EXIT]: 'Thiết bị thoát khỏi vùng địa lý',
+  [AlertType.SPEEDING]: 'Vượt tốc độ giới hạn',
+  [AlertType.SIGNAL_LOST]: 'Mất tín hiệu GPS',
+  [AlertType.DANGEROUS_OBSTACLE]: 'Phát hiện chướng ngại vật',
+  [AlertType.TRAJECTORY_DEVIATION]: 'Lệch khỏi quỹ đạo',
   [AlertType.GEOFENCE_ENTRY]: 'Restricted zone entry',
 };
 
@@ -85,8 +85,12 @@ export class AlertsConsumer implements OnModuleInit {
     const offset = message.offset;
 
     try {
-      // Step 1: Parse the raw Kafka message body
-      const data = JSON.parse(rawValue) as AlertKafkaPayload;
+      // Step 1: Parse the raw Kafka message body from envelope
+      const rawObject = JSON.parse(rawValue) as GnssKafkaEnvelope<AlertKafkaPayload>;
+      if (!rawObject || !rawObject.payload) {
+        throw new Error('Invalid GnssKafkaEnvelope structure: missing payload');
+      }
+      const data = rawObject.payload;
 
       // Step 2: Validate alert type against enum
       const alertType = data.type as AlertType;
@@ -168,6 +172,30 @@ export class AlertsConsumer implements OnModuleInit {
         `Failed to process alert message at offset ${offset}`,
         error instanceof Error ? error.stack : error,
       );
+
+      // Apply Dead Letter Queue (DLQ)
+      try {
+        const dlqPayload = {
+          originalPayload: rawValue,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          topic: KafkaTopic.GNSS_ALERTS,
+          partition,
+          offset,
+          failedAt: new Date().toISOString(),
+        };
+
+        await this.kafkaService.produce(KafkaTopic.GNSS_ALERTS_DLQ, [
+          {
+            key: message.key?.toString(),
+            value: JSON.stringify(dlqPayload),
+          },
+        ]);
+      } catch (dlqError) {
+        this.logger.error(
+          `Failed to publish alert failure to DLQ: ${dlqError instanceof Error ? dlqError.message : String(dlqError)}`,
+        );
+      }
     }
   };
 }

@@ -56,8 +56,8 @@ Find detailed implementation guides for our core services here:
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/ntthanh2603/nest-base.git
-cd nest-base
+git clone https://github.com/ntthanh2603/gnss-system.git
+cd gnss-system
 ```
 
 ### 2. Environment Setup
@@ -152,5 +152,5 @@ This project is [MIT licensed](LICENSE).
 ---
 
 <p align="center">
-  Built with ❤️ by <a href="https://github.com/ntthanh2603">Nest Base Application</a>
+  Built by <a href="https://github.com/ntthanh2603">GNSS System</a>
 </p>

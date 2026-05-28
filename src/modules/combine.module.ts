@@ -12,6 +12,7 @@ import { StatisticsModule } from './statistics/statistics.module';
 import { DeviceGroupsModule } from './device-groups/device-groups.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { LiveStreamsModule } from './live-streams/live-streams.module';
+import { RoutePlansModule } from './route-plans/route-plans.module';
 
 @Module({
   imports: [
@@ -19,7 +20,7 @@ import { LiveStreamsModule } from './live-streams/live-streams.module';
     DevicesModule, DeviceStatusModule, TelemetryModule,
     GeofencesModule, AlertsModule, MediaLogsModule,
     StatisticsModule, DeviceGroupsModule, DashboardModule,
-    LiveStreamsModule,
+    LiveStreamsModule, RoutePlansModule,
   ],
 })
 export class CombineModule {}

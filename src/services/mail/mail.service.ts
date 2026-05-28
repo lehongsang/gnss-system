@@ -22,7 +22,7 @@ export class MailService {
           otp,
           expiresIn: expiresInMinutes,
           currentYear: new Date().getFullYear(),
-          appName: this.configService.get<string>('APP_NAME', 'Nest Base'),
+          appName: this.configService.get<string>('APP_NAME', 'GNSS System'),
         },
       });
       return true;
@@ -42,7 +42,7 @@ export class MailService {
         context: {
           url,
           currentYear: new Date().getFullYear(),
-          appName: this.configService.get<string>('APP_NAME', 'Nest Base'),
+          appName: this.configService.get<string>('APP_NAME', 'GNSS System'),
         },
       });
       return true;
@@ -64,7 +64,7 @@ export class MailService {
         context: {
           url,
           currentYear: new Date().getFullYear(),
-          appName: this.configService.get<string>('APP_NAME', 'Nest Base'),
+          appName: this.configService.get<string>('APP_NAME', 'GNSS System'),
         },
       });
       return true;
@@ -83,7 +83,7 @@ export class MailService {
    * such as geofence exits, signal loss, or dangerous obstacles.
    *
    * @param email - Recipient email address (device owner)
-   * @param title - Alert title (e.g., "⚠️ Thiết bị thoát khỏi vùng địa lý")
+   * @param title - Alert title (e.g., "Thiết bị thoát khỏi vùng địa lý")
    * @param body - Detailed alert description
    * @returns true if email was sent successfully, false otherwise
    */

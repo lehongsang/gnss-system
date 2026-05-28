@@ -56,7 +56,7 @@ export const getAuth = (
       bearer(),
       multiSession(),
       twoFactor({
-        issuer: configService.get<string>('APP_NAME', 'Nest Base'),
+        issuer: configService.get<string>('APP_NAME', 'GNSS System'),
         skipVerificationOnEnable: false,
         otpOptions: {
           digits: 6,

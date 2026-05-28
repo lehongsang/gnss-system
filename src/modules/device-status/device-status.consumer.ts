@@ -7,6 +7,7 @@ import { KafkaConsumerGroup, KafkaTopic } from '@/services/kafka/kafka.enum';
 import { LoggerService } from '@/commons/logger/logger.service';
 import { PayloadValidator } from '@/utils/payload-validator.util';
 import { DeviceStatusPayloadDto } from './dtos/device-status-payload.dto';
+import { GnssKafkaEnvelope } from '@/commons/interfaces/app.interface';
 
 /**
  * Kafka consumer that listens to the GNSS_DEVICE_STATUS topic,
@@ -54,9 +55,12 @@ export class DeviceStatusConsumer implements OnModuleInit {
     const offset = message.offset;
 
     try {
-      // Step 1: Parse and strictly validate raw Kafka message body using PayloadValidator
-      const rawObject = JSON.parse(rawValue) as unknown;
-      const data = await PayloadValidator.validate(DeviceStatusPayloadDto, rawObject);
+      // Step 1: Parse envelope and extract payload
+      const rawObject = JSON.parse(rawValue) as GnssKafkaEnvelope<unknown>;
+      if (!rawObject || !rawObject.payload) {
+        throw new Error('Invalid GnssKafkaEnvelope structure: missing payload');
+      }
+      const data = await PayloadValidator.validate(DeviceStatusPayloadDto, rawObject.payload);
 
       // Step 2: Extract status
       const status = data.status;
@@ -89,6 +93,30 @@ export class DeviceStatusConsumer implements OnModuleInit {
         `Failed to process device status message at offset ${offset}`,
         error instanceof Error ? error.stack : error,
       );
+
+      // Apply Dead Letter Queue (DLQ)
+      try {
+        const dlqPayload = {
+          originalPayload: rawValue,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          topic: KafkaTopic.GNSS_DEVICE_STATUS,
+          partition,
+          offset,
+          failedAt: new Date().toISOString(),
+        };
+
+        await this.kafkaService.produce(KafkaTopic.GNSS_DEVICE_STATUS_DLQ, [
+          {
+            key: message.key?.toString(),
+            value: JSON.stringify(dlqPayload),
+          },
+        ]);
+      } catch (dlqError) {
+        this.logger.error(
+          `Failed to publish device status failure to DLQ: ${dlqError instanceof Error ? dlqError.message : String(dlqError)}`,
+        );
+      }
     }
   };
 }

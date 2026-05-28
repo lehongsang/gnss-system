@@ -31,7 +31,7 @@ export class InitialSchema1748310000000 implements MigrationInterface {
         "s3Key" character varying,
         "url" character varying,
         "status" "medias_status_enum" NOT NULL DEFAULT 'PENDING',
-        "createdBy" character varying,
+        "created_by" uuid,
         "deleted_at" TIMESTAMP WITH TIME ZONE,
         CONSTRAINT "PK_medias" PRIMARY KEY ("id")
       )

@@ -7,6 +7,7 @@ import { KafkaConsumerGroup, KafkaTopic } from '@/services/kafka/kafka.enum';
 import { LoggerService } from '@/commons/logger/logger.service';
 import { MediaType } from './entities/media-log.entity';
 import { AlertsService } from '@/modules/alerts/alerts.service';
+import { GnssKafkaEnvelope } from '@/commons/interfaces/app.interface';
 
 interface MediaUploadMessage {
   deviceId: string;
@@ -50,7 +51,12 @@ export class MediaLogsConsumer implements OnModuleInit {
     const offset = message.offset;
 
     try {
-      const payload = JSON.parse(rawValue) as MediaUploadMessage;
+      // Parse envelope and extract payload
+      const rawObject = JSON.parse(rawValue) as GnssKafkaEnvelope<MediaUploadMessage>;
+      if (!rawObject || !rawObject.payload) {
+        throw new Error('Invalid GnssKafkaEnvelope structure: missing payload');
+      }
+      const payload = rawObject.payload;
       
       this.logger.log(
         `[P:${partition}][Offset:${offset}] Processing media upload for device: ${payload.deviceId}`,
@@ -103,6 +109,30 @@ export class MediaLogsConsumer implements OnModuleInit {
         `Failed to process media upload message at offset ${offset} on topic ${topic}: ${errMsg}`,
         error instanceof Error ? error.stack : undefined,
       );
+
+      // Apply Dead Letter Queue (DLQ)
+      try {
+        const dlqPayload = {
+          originalPayload: rawValue,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          topic: KafkaTopic.GNSS_MEDIA_UPLOAD,
+          partition,
+          offset,
+          failedAt: new Date().toISOString(),
+        };
+
+        await this.kafkaService.produce(KafkaTopic.GNSS_MEDIA_UPLOAD_DLQ, [
+          {
+            key: message.key?.toString(),
+            value: JSON.stringify(dlqPayload),
+          },
+        ]);
+      } catch (dlqError) {
+        this.logger.error(
+          `Failed to publish media failure to DLQ: ${dlqError instanceof Error ? dlqError.message : String(dlqError)}`,
+        );
+      }
     }
   };
 }

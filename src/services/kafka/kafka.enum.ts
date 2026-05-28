@@ -20,12 +20,20 @@ export enum KafkaTopic {
   // ─── GNSS ──────────────────────────────────────────────────────────────────
   /** Realtime GPS coordinates bridged from MQTT: { deviceId, lng, lat, speed, heading, timestamp } */
   GNSS_COORDINATES = 'gnss.coordinates',
+  /** Dead-letter queue for failed coordinates processing */
+  GNSS_COORDINATES_DLQ = 'gnss.coordinates.dlq',
   /** Device alerts bridged from MQTT: { deviceId, type, severity, message, location, timestamp } */
   GNSS_ALERTS = 'gnss.alerts',
+  /** Dead-letter queue for failed alerts processing */
+  GNSS_ALERTS_DLQ = 'gnss.alerts.dlq',
   /** Camera images / video clips bridged from MQTT: { deviceId, mediaType, data (base64), mimeType, timestamp } */
   GNSS_MEDIA_UPLOAD = 'gnss.media.upload',
+  /** Dead-letter queue for failed media upload jobs */
+  GNSS_MEDIA_UPLOAD_DLQ = 'gnss.media.upload.dlq',
   /** Online/offline heartbeat from device: { deviceId, status, batteryLevel, timestamp } */
   GNSS_DEVICE_STATUS = 'gnss.device.status',
+  /** Dead-letter queue for failed device status updates */
+  GNSS_DEVICE_STATUS_DLQ = 'gnss.device.status.dlq',
 }
 
 /**

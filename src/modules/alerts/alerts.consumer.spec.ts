@@ -25,6 +25,7 @@ describe('AlertsConsumer', () => {
     consume: jest.fn(async (topic: string, groupId: string, handler: EachMessageHandler) => {
       handleMessageCallback = handler;
     }),
+    produce: jest.fn().mockResolvedValue(null),
   };
 
   const mockAlertsService = {
@@ -82,8 +83,16 @@ describe('AlertsConsumer', () => {
       snapshotId: 'snap-123',
     };
 
+    const mockEnvelope = {
+      correlationId: 'test-correlation-id',
+      deviceId: 'device-id-123',
+      receivedAt: '2026-05-27T10:00:00.000Z',
+      retryCount: 0,
+      payload: mockPayload,
+    };
+
     const mockMessage = {
-      value: Buffer.from(JSON.stringify(mockPayload)),
+      value: Buffer.from(JSON.stringify(mockEnvelope)),
       offset: '0',
     };
 
@@ -147,7 +156,7 @@ describe('AlertsConsumer', () => {
 
       expect(mockMailService.sendAlertEmail).toHaveBeenCalledWith(
         'owner@example.com',
-        '⚠️ Thiết bị thoát khỏi vùng địa lý',
+        'Thiết bị thoát khỏi vùng địa lý',
         'Thiết bị "Device 1": Device left allowed region',
       );
     });
@@ -160,8 +169,15 @@ describe('AlertsConsumer', () => {
         ...mockPayload,
         severity: 'INFO',
       };
+      const lowSeverityEnvelope = {
+        correlationId: 'test-correlation-id',
+        deviceId: 'device-id-123',
+        receivedAt: '2026-05-27T10:00:00.000Z',
+        retryCount: 0,
+        payload: lowSeverityPayload,
+      };
       const lowSeverityMessage = {
-        value: Buffer.from(JSON.stringify(lowSeverityPayload)),
+        value: Buffer.from(JSON.stringify(lowSeverityEnvelope)),
         offset: '0',
       };
 
@@ -203,8 +219,15 @@ describe('AlertsConsumer', () => {
         ...mockPayload,
         type: AlertType.SPEEDING,
       };
+      const speedingEnvelope = {
+        correlationId: 'test-correlation-id',
+        deviceId: 'device-id-123',
+        receivedAt: '2026-05-27T10:00:00.000Z',
+        retryCount: 0,
+        payload: speedingPayload,
+      };
       const speedingMessage = {
-        value: Buffer.from(JSON.stringify(speedingPayload)),
+        value: Buffer.from(JSON.stringify(speedingEnvelope)),
         offset: '0',
       };
 
@@ -246,8 +269,15 @@ describe('AlertsConsumer', () => {
         ...mockPayload,
         type: 'UNKNOWN_ALERT_TYPE',
       };
+      const invalidEnvelope = {
+        correlationId: 'test-correlation-id',
+        deviceId: 'device-id-123',
+        receivedAt: '2026-05-27T10:00:00.000Z',
+        retryCount: 0,
+        payload: invalidPayload,
+      };
       const invalidMessage = {
-        value: Buffer.from(JSON.stringify(invalidPayload)),
+        value: Buffer.from(JSON.stringify(invalidEnvelope)),
         offset: '0',
       };
 

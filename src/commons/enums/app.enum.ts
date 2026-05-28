@@ -66,6 +66,13 @@ export enum DeviceStatusEnum {
 /**
  * Enum representing the type of media captured by a device camera.
  */
+export enum RoutePlanStatus {
+  PLANNED = 'planned',
+  ACTIVE = 'active',
+  COMPLETED = 'completed',
+  CANCELLED = 'cancelled',
+}
+
 export enum MediaType {
   VIDEO_CHUNK = 'video_chunk',
   IMAGE_FRAME = 'image_frame',

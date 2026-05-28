@@ -86,6 +86,10 @@ export interface DeviceStatusKafkaPayload {
 // ─── Users / Auth ──────────────────────────────────────────────────────────────
 
 /**
+
+// ─── Users / Auth ──────────────────────────────────────────────────────────────
+
+/**
  * Data shape required when registering a new user manually
  * (e.g., via admin API or OTP-based sign-up flow).
  */
@@ -98,3 +102,20 @@ export interface RegistrationUserData {
   createdAt: number;
 }
 
+// ─── Messaging Envelope ────────────────────────────────────────────────────────
+
+/**
+ * Standard messaging envelope for all GNSS telemetry, alerts, media and status updates.
+ */
+export interface GnssKafkaEnvelope<T = unknown> {
+  /** Traceability / correlation ID to link event workflows */
+  correlationId: string;
+  /** The unique device UUID */
+  deviceId: string;
+  /** ISO 8601 string of when the gateway received the message from MQTT broker */
+  receivedAt: string;
+  /** Number of retry attempts done (0 for new messages) */
+  retryCount: number;
+  /** The original domain-specific payload */
+  payload: T;
+}

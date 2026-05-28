@@ -7,6 +7,7 @@ import { DevicesService } from '@/modules/devices/devices.service';
 import { AlertsService } from '@/modules/alerts/alerts.service';
 import { RedisService } from '@/services/redis/redis.service';
 import { GeofencesService } from '@/modules/geofences/geofences.service';
+import { RouteDeviationService } from '@/modules/route-plans/route-deviation.service';
 import type { Device } from '@/modules/devices/entities/device.entity';
 import { AlertType } from '@/commons/enums/app.enum';
 import type { EachMessageHandler } from 'kafkajs';
@@ -19,6 +20,7 @@ describe('TelemetryConsumer', () => {
     consume: jest.fn((topic: string, groupId: string, handler: EachMessageHandler) => {
       handleMessageCallback = handler;
     }),
+    produce: jest.fn().mockResolvedValue(null),
   };
 
   const mockTelemetryService = {
@@ -46,6 +48,10 @@ describe('TelemetryConsumer', () => {
     evaluateGeofenceTransitions: jest.fn(),
   };
 
+  const mockRouteDeviationService = {
+    checkDeviation: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module = await Test.createTestingModule({
       providers: [
@@ -57,6 +63,7 @@ describe('TelemetryConsumer', () => {
         { provide: AlertsService, useValue: mockAlertsService },
         { provide: RedisService, useValue: mockRedisService },
         { provide: GeofencesService, useValue: mockGeofencesService },
+        { provide: RouteDeviationService, useValue: mockRouteDeviationService },
       ],
     }).compile();
 
@@ -72,12 +79,18 @@ describe('TelemetryConsumer', () => {
 
   describe('handleMessage', () => {
     const mockMessageValue = JSON.stringify({
+      correlationId: 'test-correlation-id',
       deviceId: '019e4a45-b4aa-74ed-b5c2-484b89b18701',
-      lng: 105.8,
-      lat: 21.0,
-      speed: 95.5,
-      heading: 180,
-      timestamp: '2026-05-27T10:00:00.000Z',
+      receivedAt: '2026-05-27T10:00:00.000Z',
+      retryCount: 0,
+      payload: {
+        deviceId: '019e4a45-b4aa-74ed-b5c2-484b89b18701',
+        lng: 105.8,
+        lat: 21.0,
+        speed: 95.5,
+        heading: 180,
+        timestamp: '2026-05-27T10:00:00.000Z',
+      },
     });
 
     const mockMessage = {
@@ -117,6 +130,18 @@ describe('TelemetryConsumer', () => {
         heading: 180,
         timestamp: new Date('2026-05-27T10:00:00.000Z'),
       });
+
+      expect(mockRouteDeviationService.checkDeviation).toHaveBeenCalledWith(
+        '019e4a45-b4aa-74ed-b5c2-484b89b18701',
+        {
+          lng: 105.8,
+          lat: 21.0,
+          speed: 95.5,
+          heading: 180,
+          timestamp: new Date('2026-05-27T10:00:00.000Z'),
+          accuracyStatus: 'gnss_only',
+        },
+      );
     });
 
     /**

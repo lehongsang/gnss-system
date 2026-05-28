@@ -19,6 +19,7 @@ import { DeviceStatus } from '@/modules/device-status/entities/device-status.ent
 import { Telemetry } from '@/modules/telemetry/entities/telemetry.entity';
 import { MediaLog } from '@/modules/media-logs/entities/media-log.entity';
 import { Alert } from '@/modules/alerts/entities/alert.entity';
+import * as bcrypt from 'bcryptjs';
 
 async function bootstrap() {
   const logger = new Logger('Seeder');
@@ -116,6 +117,9 @@ async function bootstrap() {
     const existingDevice = await deviceRepo.findOne({
       where: { name: deviceData.name },
     });
+    const plainPassword = 'mqtt_password_123';
+    const hashedPassword = await bcrypt.hash(plainPassword, 12);
+
     if (!existingDevice) {
       // Assign devices to users: Device A and B to user1, Device C to admin
       const owner =
@@ -123,18 +127,27 @@ async function bootstrap() {
           ? createdUsers.find((u) => u.email === 'user1@gnss.com')
           : createdUsers.find((u) => u.email === 'admin@gnss.com');
 
+      const deviceId = uuidv7();
       const newDevice = deviceRepo.create({
-        id: uuidv7(),
+        id: deviceId,
         name: deviceData.name,
         speedLimitKmh: deviceData.speedLimitKmh,
         owner: owner,
+        mqttUsername: `device:${deviceId}`,
+        mqttPasswordHash: hashedPassword,
+        mqttCredentialsIssuedAt: new Date(),
       });
       await deviceRepo.save(newDevice);
       createdDevices.push(newDevice);
-      logger.log(`Created device: ${deviceData.name}`);
+      logger.log(`Created device: ${deviceData.name} (MQTT Username: device:${deviceId}, Password: ${plainPassword})`);
     } else {
+      existingDevice.mqttUsername = `device:${existingDevice.id}`;
+      existingDevice.mqttPasswordHash = hashedPassword;
+      existingDevice.mqttCredentialsIssuedAt = new Date();
+      await deviceRepo.save(existingDevice);
+      
       createdDevices.push(existingDevice);
-      logger.log(`Device already exists: ${deviceData.name}`);
+      logger.log(`Device already exists, updated MQTT credentials: ${deviceData.name} (MQTT Username: device:${existingDevice.id}, Password: ${plainPassword})`);
     }
   }
 

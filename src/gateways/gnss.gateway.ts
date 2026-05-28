@@ -116,7 +116,7 @@ export class GnssGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.logger.log(`User ${user.id} joined user room:${userId}`);
   }
 
-  // ─── Broadcast Methods (called by consumers) ──────────────────────────────
+  // Broadcast methods called by consumers
 
   /**
    * Broadcasts a telemetry update to all clients watching a specific device.
@@ -188,7 +188,7 @@ export class GnssGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
   }
 
-  // ─── Lifecycle Hooks ──────────────────────────────────────────────────────
+  // Lifecycle hooks
 
   /**
    * Handles new connection by logging and performing an early authentication check

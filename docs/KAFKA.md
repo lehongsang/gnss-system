@@ -31,7 +31,7 @@ Key environment variables in `.env`:
 ```env
 KAFKA_HOST=localhost
 KAFKA_PORT=9092
-KAFKA_CLIENT_ID=nest-base
+KAFKA_CLIENT_ID=gnss-system
 ```
 
 ---
@@ -52,7 +52,7 @@ export class MyService {
       {
         value: {
           userId,
-          message: 'Welcome to Nest Base!',
+          message: 'Welcome to GNSS System!',
           timestamp: new Date().toISOString()
         }
       }
