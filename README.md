@@ -1,156 +1,59 @@
-# 🚀 NestJS Clean Architecture Boilerplate
+# GNSS System Backend
 
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+NestJS backend for a GNSS tracking system with authentication, telemetry ingestion, alerts, storage, route planning, MQTT integration, Kafka/Redpanda messaging, and MediaMTX live stream support.
 
-🚀 A production-ready NestJS Boilerplate built with **Clean Architecture** and **SOLID** principles. Designed for scalability, maintainability, and high-performance media handling.
+## Documentation
 
-[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://choosealicense.com/licenses/mit/)
-[![NestJS](https://img.shields.io/badge/NestJS-11.x-red.svg)](https://nestjs.com/)
-[![Better Auth](https://img.shields.io/badge/Better--Auth-1.4.x-blue.svg)](https://better-auth.com/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
+- [Storage & Media](docs/STORAGE.md)
+- [Kafka Messaging](docs/KAFKA.md)
+- [MQTT](docs/MQTT.md)
+- [Authentication](docs/AUTH.md)
+- [Exception Handling](docs/EXCEPTIONS.md)
+- [Frontend Route Planning Guide](docs/FE_ROUTE_PLANNING_GUIDE.md)
+- [Deployment](docs/DEPLOYMENT.md)
 
----
+## Tech Stack
 
-## 📑 Project Documentation
+- NestJS 11, TypeScript
+- PostgreSQL/PostGIS, TypeORM
+- Redis
+- Redpanda Kafka
+- SeaweedFS S3-compatible storage
+- EMQX MQTT broker
+- MediaMTX
+- Better Auth
 
-Find detailed implementation guides for our core services here:
-
-- [📦 **Storage & Media**](docs/STORAGE.md) - S3, SeaweedFS, and Sharp image optimization.
-- [📡 **Kafka Messaging**](docs/KAFKA.md) - Event-driven architecture with Redpanda.
-- [🔍 **Search Engine**](docs/SEARCH.md) - Full-text search with OpenSearch.
-- [🛡️ **Authentication**](docs/AUTH.md) - Better Auth integration and security.
-- [⚠️ **Exception Handling**](docs/EXCEPTIONS.md) - Standardized error responses.
-
----
-
-## 🌟 Key Features
-
-- **🛡️ Better Auth**: Production-ready authentication with multi-session support and roles.
-- **📦 Advanced Storage**: S3-compatible storage (**SeaweedFS**) with automated **Sharp** image optimization (WebP).
-- **📡 Event-Driven**: High-performance messaging using **Redpanda (Kafka)** for background tasks.
-- **🔍 Full-Text Search**: Integrated **OpenSearch** cluster for lightning-fast search capabilities.
-- **🏗️ Clean Architecture**: Modular structure with strict separation of concerns.
-- **🐳 Dockerized**: Full infrastructure setup including Postgres, Redis, Kafka, and SeaweedFS.
-- **📜 Swagger**: Interactive API documentation at `/api/docs`.
-- **🚀 Taskfile**: Simplified workflow using `task` commands.
-
----
-
-## 🛠️ Tech Stack
-
-- **Core**: NestJS (v11), TypeScript
-- **Database**: PostgreSQL (v18) + TypeORM
-- **Cache**: Redis (v8)
-- **Messaging**: Redpanda (Kafka-compatible)
-- **Storage**: SeaweedFS (S3-compatible)
-- **Search**: OpenSearch (v2.11)
-- **Auth**: Better Auth (v1.4)
-- **Processing**: Sharp (Image processing)
-
----
-
-## 📥 Getting Started
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/ntthanh2603/gnss-system.git
-cd gnss-system
-```
-
-### 2. Environment Setup
-
-Copy the example environment file and fill in your details:
+## Local Setup
 
 ```bash
 cp .env.example .env
-```
-
-Key variables to check:
-
-- `POSTGRES_DB`, `REDIS_URL`
-- `S3_ENDPOINT`, `S3_EXTERNAL_URL`
-- `KAFKA_HOST`, `KAFKA_PORT`
-
-### 3. Install Dependencies
-
-```bash
 npm install
+npm run start:dev
 ```
 
-### 4. Running the Application
+## Docker
 
-#### Using Task (Recommended)
+Development/full stack:
 
 ```bash
-task dev     # Start development server
-task build   # Build the project
-task test    # Run all tests
+docker compose up -d --build
 ```
 
----
-
-## 🐳 Docker Usage
-
-Run the entire infrastructure stack (App + Postgres + Redis + Kafka + SeaweedFS + OpenSearch) with a single command:
+Production stack:
 
 ```bash
-docker-compose up -d --build
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 
-The application will be available at `http://localhost:3000`.
+The API is available at `http://localhost:3000` by default.
 
----
-
-## 📂 Project Structure
-
-```text
-src/
-├── commons/       # Global decorators, filters, guards, interceptors, pipes
-├── database/      # TypeORM configuration and Database module
-├── modules/       # Feature modules (Auth, Users, Root)
-├── services/      # Shared infrastructure services (Storage, Kafka, etc.)
-├── utils/         # Helper functions
-└── main.ts        # Application entry point
-```
-
----
-
-## 📑 API Documentation
-
-Once the app is running, visit:
-
-- **Swagger UI**: `http://localhost:3000/api/docs`
-- **Auth Docs**: `http://localhost:3000/api/auth/docs`
-
----
-
-## ✅ Testing
+## Scripts
 
 ```bash
-# Unit tests
-npm run test
-
-# E2E tests
+npm run build
+npm test
 npm run test:e2e
+npm run migration:run
 ```
 
----
-
-## 🤝 Contribution
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
----
-
-## 📜 License
-
-This project is [MIT licensed](LICENSE).
-
----
-
-<p align="center">
-  Built by <a href="https://github.com/ntthanh2603">GNSS System</a>
-</p>
+Swagger is available at `/api/docs` outside production by default. Set `SWAGGER_ENABLED=true` to enable it explicitly.

@@ -4,8 +4,8 @@
       "name": "admin",
       "credentials": [
         {
-          "accessKey": "admin",
-          "secretKey": "admin"
+          "accessKey": "replace-with-s3-access-key",
+          "secretKey": "replace-with-s3-secret-key"
         }
       ],
       "actions": ["Admin", "Read", "Write", "List", "Tagging"]

@@ -1,0 +1,26 @@
+services:
+  postgres:
+    ports: !reset []
+
+  redis:
+    ports: !reset []
+
+  redpanda:
+    ports: !reset []
+
+  seaweedfs:
+    ports: !reset []
+
+  emqx:
+    ports: !override
+      - "${MQTT_PUBLIC_PORT:-1883}:1883"
+
+  mediamtx:
+    ports: !override
+      - "${MEDIAMTX_RTSP_PORT:-8554}:8554"
+      - "${MEDIAMTX_WEBRTC_PORT:-8889}:8889"
+
+  kafka-ui:
+    profiles:
+      - tools
+    ports: !reset []

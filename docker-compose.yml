@@ -1,7 +1,7 @@
 services:
   postgres:
     container_name: gnss-postgres
-    image: postgis/postgis:latest
+    image: ${POSTGIS_IMAGE:-postgis/postgis:16-3.4}
     restart: always
     env_file:
       - .env
@@ -9,7 +9,6 @@ services:
       POSTGRES_USER: "${POSTGRES_USERNAME:-postgres}"
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-gnss_system}
-      POSTGRES_HOST_AUTH_METHOD: trust
       PGUSER: "${POSTGRES_USERNAME:-postgres}"
       PGPASSWORD: "${POSTGRES_PASSWORD:-postgres}"
     volumes:
@@ -70,6 +69,7 @@ services:
       KAFKA_HOST: redpanda
       KAFKA_PORT: 29092
       MQTT_HOST: emqx
+      MEDIAMTX_API_URL: http://mediamtx:9997
     depends_on:
       postgres:
         condition: service_healthy
@@ -77,6 +77,12 @@ services:
         condition: service_healthy
       emqx:
         condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_healthy
+      mediamtx:
+        condition: service_started
     healthcheck:
       test:
         [
@@ -110,7 +116,7 @@ services:
       - --kafka-addr
       - PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9092
       - --advertise-kafka-addr
-      - PLAINTEXT://redpanda:29092,OUTSIDE://localhost:9092
+      - PLAINTEXT://redpanda:29092,OUTSIDE://${KAFKA_ADVERTISED_HOST:-localhost}:9092
       - --check=false
     ports:
       - "${KAFKA_PORT:-9092}:9092"
@@ -127,72 +133,6 @@ services:
       start_period: 20s
     networks:
       - datn_gnss
-
-#  opensearch:
-#    container_name: gnss-opensearch
-#    image: opensearchproject/opensearch:2.11.0
-#    env_file:
-#      - .env
-#    environment:
-#      - cluster.name=opensearch-cluster
-#      - node.name=opensearch-node1
-#      - discovery.type=single-node
-#      - bootstrap.memory_lock=true
-#      - "OPENSEARCH_JAVA_OPTS=-Xms1024m -Xmx1024m"
-#      - DISABLE_INSTALL_DEMO_CONFIG=false
-#      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_ADMIN_PASSWORD:-admin}
-#      - plugins.security.disabled=true
-#    ulimits:
-#      memlock:
-#        soft: -1
-#        hard: -1
-#      nofile:
-#        soft: 65536
-#        hard: 65536
-#    volumes:
-#      - opensearch_data:/usr/share/opensearch/data
-#    ports:
-#      - "${OPENSEARCH_PORT:-9200}:9200"
-#      - "9600:9600"
-#    healthcheck:
-#      test:
-#        [
-#          "CMD-SHELL",
-#          "curl -fsS http://localhost:9200/_cluster/health >/dev/null || wget -qO- http://localhost:9200/_cluster/health >/dev/null || exit 1",
-#        ]
-#      interval: 10s
-#      timeout: 5s
-#      retries: 5
-#      start_period: 20s
-#    networks:
-#      - datn_gnss
-#
-#
-#  opensearch-dashboards:
-#    container_name: gnss-opensearch-dashboards
-#    image: opensearchproject/opensearch-dashboards:2.11.0
-#    env_file:
-#      - .env
-#    volumes:
-#      - ./fluent-bit/opensearch_dashboards.yml:/usr/share/opensearch-dashboards/config/opensearch_dashboards.yml
-#    ports:
-#      - "${DASHBOARDS_PORT:-5601}:5601"
-#    environment:
-#      - OPENSEARCH_HOSTS=https://opensearch:9200
-#      - OPENSEARCH_USERNAME=${OPENSEARCH_ADMIN_USER:-admin}
-#      - OPENSEARCH_PASSWORD=${OPENSEARCH_ADMIN_PASSWORD:-admin}
-#    healthcheck:
-#      test:
-#        [
-#          "CMD-SHELL",
-#          "curl -fsS http://localhost:5601/api/status >/dev/null || wget -qO- http://localhost:5601/api/status >/dev/null || exit 1",
-#        ]
-#      interval: 10s
-#      timeout: 5s
-#      retries: 5
-#      start_period: 20s
-#    networks:
-#      - datn_gnss
 
 #  fluent-bit-shipper:
 #    container_name: gnss-fluent-bit-shipper
@@ -214,35 +154,31 @@ services:
 #    depends_on:
 #      - redpanda
 
-#  fluent-bit-indexer:
-#    container_name: gnss-fluent-bit-indexer
-#    image: fluent/fluent-bit:latest
-#    env_file:
-#      - .env
-#    volumes:
-#      - ./fluent-bit/indexer.conf:/fluent-bit/etc/fluent-bit.conf
-#      - ./fluent-bit/parsers.conf:/fluent-bit/etc/parsers.conf
-#    environment:
-#      - OPENSEARCH_ADMIN_USER=${OPENSEARCH_ADMIN_USER:-admin}
-#      - OPENSEARCH_ADMIN_PASSWORD=${OPENSEARCH_ADMIN_PASSWORD:-admin}
-#    healthcheck:
-#      test: ["CMD-SHELL", "ps aux | grep -q '[f]luent-bit'"]
-#      interval: 10s
-#      timeout: 5s
-#      retries: 5
-#      start_period: 10s
-#    networks:
-#      - datn_gnss
-#    depends_on:
-#      - redpanda
-#      - opensearch
-
   seaweedfs:
     image: chrislusf/seaweedfs:3.59
     container_name: gnss-seaweedfs
     env_file:
       - .env
-    command: "server -master -volume -filer -s3 -s3.config=/etc/seaweedfs/s3.json"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        cat > /tmp/s3.json <<EOF
+        {
+          "identities": [
+            {
+              "name": "$${S3_ACCESS_KEY:-admin}",
+              "credentials": [
+                {
+                  "accessKey": "$${S3_ACCESS_KEY:-admin}",
+                  "secretKey": "$${S3_SECRET_KEY:-admin}"
+                }
+              ],
+              "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+            }
+          ]
+        }
+        EOF
+        weed server -master -volume -filer -s3 -s3.config=/tmp/s3.json
     ports:
       - "9333:9333"
       - "${SEAWEEDFS_VOLUME_PORT:-8080}:8080"
@@ -260,7 +196,6 @@ services:
       start_period: 10s
     volumes:
       - seaweedfs_data:/data
-      - ./seaweedfs/s3.json:/etc/seaweedfs/s3.json
     networks:
       - datn_gnss
 
@@ -289,7 +224,7 @@ services:
       - datn_gnss
 
   mediamtx:
-    image: bluenviron/mediamtx:latest
+    image: ${MEDIAMTX_IMAGE:-bluenviron/mediamtx:latest}
     container_name: gnss-mediamtx
     restart: always
     ports:
@@ -308,7 +243,7 @@ services:
 
   kafka-ui:
     container_name: gnss-kafka-ui
-    image: provectuslabs/kafka-ui:latest
+    image: ${KAFKA_UI_IMAGE:-provectuslabs/kafka-ui:latest}
     ports:
       - "${KAFKA_UI_PORT:-8088}:8080"
     environment:
@@ -323,7 +258,6 @@ services:
 volumes:
   pgdata:
   redisdata:
-  opensearch_data:
   seaweedfs_data:
   logs:
   emqx_data:

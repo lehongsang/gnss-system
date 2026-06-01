@@ -8,7 +8,6 @@ import { DataSource } from 'typeorm';
 import { RedisService } from '../src/services/redis/redis.service';
 import { KafkaService } from '../src/services/kafka/kafka.service';
 import { StorageService } from '../src/services/storage/storage.service';
-import { SearchService } from '../src/services/search/search.service';
 import { MqttService } from '../src/services/mqtt/mqtt.service';
 import { MailService } from '../src/services/mail/mail.service';
 import { MediaServerService } from '../src/services/media-server/media-server.service';
@@ -179,11 +178,6 @@ describe('AppController (e2e)', () => {
     deleteFile: jest.fn().mockResolvedValue(null),
   };
 
-  const mockSearchService = {
-    search: jest.fn().mockResolvedValue([]),
-    index: jest.fn().mockResolvedValue(null),
-  };
-
   const mockMqttService = {
     publish: jest.fn().mockResolvedValue(null),
     subscribe: jest.fn().mockResolvedValue(null),
@@ -217,8 +211,6 @@ describe('AppController (e2e)', () => {
       .useValue(mockKafkaService)
       .overrideProvider(StorageService)
       .useValue(mockStorageService)
-      .overrideProvider(SearchService)
-      .useValue(mockSearchService)
       .overrideProvider(MqttService)
       .useValue(mockMqttService)
       .overrideProvider(MailService)
