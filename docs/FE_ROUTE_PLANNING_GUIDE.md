@@ -28,6 +28,14 @@ FE can lam cac luong chinh:
 8. FE cap nhat marker thiet bi realtime qua WebSocket.
 9. FE hien alert khi backend phat hien `trajectory_deviation`.
 
+Ngoai cach click tren map, FE co the cho user go ten dia diem, vi du:
+
+```txt
+Dai hoc Bach khoa Ha Noi
+```
+
+Sau do dung Mapbox Geocoding de doi text thanh toa do, roi dung toa do do lam `destination`.
+
 ## 2. API Summary
 
 | Chuc nang | Method | Endpoint |
@@ -136,6 +144,227 @@ GeoJSON coordinates co thu tu [lng, lat].
 Neu FE dung Mapbox GL JS/MapLibre va ve bang GeoJSON source thi co the dung truc tiep.
 
 Neu FE dung Leaflet polyline thi phai convert sang `[lat, lng]`.
+
+## 4.1. Chon diem den bang search text
+
+Backend route planning hien tai nhan destination dang toa do:
+
+```ts
+destination: { lat: number; lng: number }
+```
+
+Vi vay neu user go ten dia diem, FE can them buoc:
+
+```txt
+search text -> Mapbox Search Box suggest -> user chon suggestion -> retrieve -> lay toa do -> preview route
+```
+
+Khong nen dung Mapbox Geocoding v6 cho o search POI nhu:
+
+```txt
+benh vien bach mai
+dai hoc bach khoa ha noi
+vincom ba trieu
+```
+
+Mapbox Geocoding v6 khong con tra POI data; Mapbox khuyen dung Search Box API cho interactive search/autocomplete. Search Box API phu hop hon vi no ho tro POI, address, street, neighborhood, place name, district, postcode, region, country.
+
+### Goi Mapbox Search Box tu FE
+
+Vi FE da co Mapbox public token de render map, co the dung token do cho Search Box.
+
+Luong dung:
+
+```txt
+1. User go text
+2. FE goi /suggest
+3. FE hien dropdown suggestions
+4. User chon suggestion
+5. FE goi /retrieve bang mapbox_id
+6. Lay toa do tu feature geometry
+7. Goi /api/route-plans/preview
+```
+
+### Suggest endpoint
+
+Endpoint:
+
+```txt
+GET https://api.mapbox.com/search/searchbox/v1/suggest
+```
+
+Query params de xuat:
+
+```txt
+q=<search text>
+country=VN
+language=vi
+limit=5
+proximity=<lng>,<lat>
+types=poi,address,street,place
+session_token=<uuid-v4>
+access_token=<MAPBOX_TOKEN>
+```
+
+Vi du:
+
+```txt
+https://api.mapbox.com/search/searchbox/v1/suggest?q=b%E1%BB%87nh%20vi%E1%BB%87n%20b%E1%BA%A1ch%20mai&country=VN&language=vi&limit=5&proximity=105.841,21.003&types=poi,address,street,place&session_token=SESSION_UUID&access_token=YOUR_MAPBOX_TOKEN
+```
+
+Luu y:
+
+- `proximity` nen la vi tri hien tai cua ban do hoac vi tri thiet bi, theo thu tu `lng,lat`.
+- `country=VN` giup uu tien ket qua o Viet Nam.
+- `language=vi` giup ten hien thi phu hop hon.
+- `types=poi,address,street,place` giup tim ca dia diem/benh vien/truong hoc, khong chi tim duong.
+- `session_token` nen tao moi cho moi phien search cua user, dung UUID v4.
+- Nen debounce input khoang 300-500ms de tranh goi API qua nhieu.
+- Chi goi khi search text co it nhat 2-3 ky tu.
+
+### Parse ket qua suggest
+
+Search Box suggest response co danh sach `suggestions`.
+
+FE lay tung item:
+
+```ts
+type PlaceSuggestion = {
+  id: string;
+  mapboxId: string;
+  name: string;
+  fullAddress: string;
+};
+```
+
+Mapping y tuong:
+
+```ts
+const suggestions = response.suggestions.map((item) => {
+  return {
+    id: item.mapbox_id,
+    mapboxId: item.mapbox_id,
+    name: item.name,
+    fullAddress: item.full_address ?? item.place_formatted ?? '',
+  };
+});
+```
+
+### Retrieve endpoint
+
+Khi user chon mot suggestion, FE goi retrieve de lay toa do chinh xac.
+
+Endpoint:
+
+```txt
+GET https://api.mapbox.com/search/searchbox/v1/retrieve/{mapbox_id}
+```
+
+Query params:
+
+```txt
+session_token=<same-session-token>
+access_token=<MAPBOX_TOKEN>
+```
+
+Parse toa do:
+
+```ts
+const feature = response.features?.[0];
+const [lng, lat] = feature.geometry.coordinates;
+
+const destination = { lat, lng };
+setDestination(destination);
+setDestinationLabel(
+  feature.properties?.full_address ??
+  feature.properties?.name ??
+  suggestion.name,
+);
+```
+
+Sau do FE goi preview route:
+
+```ts
+await api.post('/api/route-plans/preview', {
+  origin,
+  destination,
+  mode,
+});
+```
+
+### UI search box de xuat
+
+Trong panel tao route:
+
+```txt
+[Device selector]
+[Search destination input: "Nhap dia diem den"]
+[Suggestion dropdown]
+[Mode selector]
+[Threshold input]
+[Preview route button]
+[Save route button]
+```
+
+Suggestion item nen hien:
+
+```txt
+Ten dia diem
+Dia chi day du
+```
+
+Vi du voi query:
+
+```txt
+benh vien bach mai
+```
+
+Ket qua mong muon nen la POI benh vien, khong phai chi la duong/phuong `Bach Mai`.
+
+Neu van khong ra POI dung, thu query co dau va day du hon:
+
+```txt
+Bệnh viện Bạch Mai, Hà Nội
+Bach Mai Hospital, Hanoi
+78 Giải Phóng, Đống Đa, Hà Nội
+```
+
+Khi hover/click suggestion:
+
+- Dat destination marker len map.
+- Fly map den destination.
+- Goi preview route hoac cho user bam `Xem truoc tuyen`.
+
+### Click map va search text nen dung chung state
+
+Du user click map hay search text, FE nen quy ve cung mot state:
+
+```ts
+destination = { lat, lng }
+destinationLabel = 'Dai hoc Bach khoa Ha Noi'
+```
+
+Khac nhau:
+
+- Click map: co toa do ngay, label co the de trong hoac reverse geocode sau.
+- Search text: co label va toa do tu Mapbox Geocoding.
+
+### Co nen tao backend endpoint search khong?
+
+MVP: FE co the goi Mapbox Search Box truc tiep bang public token.
+
+Neu muon quan ly quota/log/cache tot hon, co the them backend endpoint sau:
+
+```txt
+GET /api/route-plans/search?q=Dai%20hoc%20Bach%20khoa%20Ha%20Noi&proximityLng=105.8&proximityLat=21.0
+```
+
+Backend se proxy sang Mapbox Search Box. Cach nay giup:
+
+- Khong lap logic Mapbox o nhieu FE client.
+- Co the cache query pho bien.
+- Co the log search usage.
+- Co the doi provider sau nay ma FE khong doi API.
 
 ## 5. Ve route tren Mapbox GL JS
 
