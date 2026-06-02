@@ -118,7 +118,10 @@ async function bootstrap() {
     }
   }
 
-  const port = configService.get<number>('APP_PORT') ?? DEFAULT_PORT;
+  const port =
+    configService.get<number>('APP_PORT') ??
+    configService.get<number>('PORT') ??
+    DEFAULT_PORT;
   await app.listen(port);
   const logger = new Logger('Application');
   logger.log(`Application is running on url http://localhost:${port}`);

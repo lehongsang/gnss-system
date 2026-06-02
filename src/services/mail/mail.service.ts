@@ -45,9 +45,9 @@ export class MailService {
     subject: string;
     template: string;
     context: Record<string, unknown>;
-  }) {
+  }): Promise<void> {
     const html = await this.renderTemplate(options.template, options.context);
-    return this.transporter.sendMail({
+    await this.transporter.sendMail({
       to: options.to,
       subject: options.subject,
       html,
