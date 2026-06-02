@@ -1,4 +1,4 @@
-import { RoutePlan } from '../entities/route-plan.entity';
+import type { RoutePlan } from '../entities/route-plan.entity';
 
 export interface GeoJSONLineString {
   type: 'LineString';

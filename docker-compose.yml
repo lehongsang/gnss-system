@@ -1,7 +1,7 @@
 services:
   postgres:
     container_name: gnss-postgres
-    image: ${POSTGIS_IMAGE:-postgis/postgis:16-3.4}
+    image: ${POSTGIS_IMAGE:-postgis/postgis:17-3.5}
     restart: always
     env_file:
       - .env
@@ -64,6 +64,7 @@ services:
       - .env
     environment:
       POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
       REDIS_URL: redis://:${REDIS_PASSWORD:-password}@redis:6379
       S3_ENDPOINT: http://seaweedfs:8333
       KAFKA_HOST: redpanda
@@ -209,8 +210,8 @@ services:
       - "8883:8883"
       - "18083:18083"
     environment:
-      EMQX_DASHBOARD__DEFAULT_USERNAME: admin
-      EMQX_DASHBOARD__DEFAULT_PASSWORD: public
+      EMQX_DASHBOARD__DEFAULT_USERNAME: ${EMQX_DASHBOARD_USERNAME:-admin}
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: ${EMQX_DASHBOARD_PASSWORD:-public}
     healthcheck:
       test: ["CMD", "/opt/emqx/bin/emqx_ctl", "status"]
       interval: 5s

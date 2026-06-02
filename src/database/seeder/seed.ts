@@ -21,6 +21,10 @@ import { MediaLog } from '@/modules/media-logs/entities/media-log.entity';
 import { Alert } from '@/modules/alerts/entities/alert.entity';
 import * as bcrypt from 'bcryptjs';
 
+const hashBetterAuthPassword = hashPassword as (
+  password: string,
+) => Promise<string>;
+
 async function bootstrap() {
   const logger = new Logger('Seeder');
   logger.log('Initializing Application Context for Seeding...');
@@ -78,7 +82,7 @@ async function bootstrap() {
       createdUsers.push(newUser);
 
       // Create account (for better-auth)
-      const hashedPassword = await hashPassword(userData.password);
+      const hashedPassword = await hashBetterAuthPassword(userData.password);
       const newAccount = accountRepo.create({
         id: uuidv7(),
         user: newUser,
