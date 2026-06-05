@@ -207,7 +207,17 @@ export class MediaLogsService implements OnModuleInit {
    * NestJS module initialization hook.
    * Starts a background cron-like interval sweeping S3 bucket for orphaned files.
    */
-  onModuleInit() {
+  async onModuleInit() {
+    // Ensure PostGIS geom column exists on media_logs
+    try {
+      await this.mediaLogRepository.query(`
+        ALTER TABLE media_logs ADD COLUMN IF NOT EXISTS geom geometry(Point, 4326);
+        CREATE INDEX IF NOT EXISTS idx_media_logs_geom ON media_logs USING GIST (geom);
+      `);
+    } catch (err) {
+      this.logger.error('Failed to verify media_logs geom column in onModuleInit:', err);
+    }
+
     // Do not schedule intervals during test runs to prevent Jest open handles leak
     if (process.env.NODE_ENV === 'test') {
       return;
@@ -276,18 +286,42 @@ export class MediaLogsService implements OnModuleInit {
         ? MediaType.IMAGE_FRAME
         : MediaType.VIDEO_CHUNK;
 
-    // Step 5: Create and persist the media log record
+    // Step 5: Determine coordinates (Directly from DTO or fallback to closest telemetry)
+    let lat = dto.lat ?? null;
+    let lng = dto.lng ?? null;
+    const startTime = new Date();
+
+    if (lat === null || lng === null) {
+      const closest = await this.findClosestTelemetry(dto.deviceId, startTime);
+      if (closest) {
+        lat = closest.lat;
+        lng = closest.lng;
+      }
+    }
+
+    // Step 6: Create and persist the media log record
     const log = this.mediaLogRepository.create({
       deviceId: dto.deviceId,
       mediaType: mappedMediaType,
-      startTime: new Date(),
-      endTime: new Date(),
+      startTime,
+      endTime: startTime,
       s3Key: dto.s3Key,
       fileUrl: '',
       snapshotId: dto.snapshotId ?? null,
+      lat,
+      lng,
     });
 
     const savedLog = await this.mediaLogRepository.save(log);
+
+    // If coordinates are available, update the PostGIS geom column
+    if (lat !== null && lng !== null) {
+      await this.mediaLogRepository.query(
+        `UPDATE media_logs SET geom = ST_SetSRID(ST_MakePoint($1, $2), 4326) WHERE id = $3`,
+        [lng, lat, savedLog.id]
+      );
+    }
+
     if (dto.snapshotId && mappedMediaType === MediaType.IMAGE_FRAME) {
       await this.alertsService.linkSnapshotMedia(
         dto.deviceId,
@@ -301,6 +335,100 @@ export class MediaLogsService implements OnModuleInit {
     );
 
     return savedLog;
+  }
+
+  /**
+   * Private helper to find the telemetry coordinate closest to a given timestamp.
+   * Performs index-scans for points before and after, then returns the closest one.
+   */
+  private async findClosestTelemetry(
+    deviceId: string,
+    time: Date,
+  ): Promise<{ lat: number; lng: number } | null> {
+    const formattedTime = time.toISOString();
+
+    interface TelemetryPoint {
+      lat: number;
+      lng: number;
+      timestamp: string | Date;
+    }
+
+    const before = await this.mediaLogRepository.query<TelemetryPoint[]>(
+      `SELECT lat, lng, timestamp FROM telemetry 
+       WHERE device_id = $1 AND timestamp <= $2 
+       ORDER BY timestamp DESC LIMIT 1`,
+      [deviceId, formattedTime],
+    );
+
+    const after = await this.mediaLogRepository.query<TelemetryPoint[]>(
+      `SELECT lat, lng, timestamp FROM telemetry 
+       WHERE device_id = $1 AND timestamp > $2 
+       ORDER BY timestamp ASC LIMIT 1`,
+      [deviceId, formattedTime],
+    );
+
+    const recordBefore = before[0];
+    const recordAfter = after[0];
+
+    if (!recordBefore && !recordAfter) {
+      return null;
+    }
+
+    if (!recordBefore && recordAfter) {
+      return { lat: recordAfter.lat, lng: recordAfter.lng };
+    }
+
+    if (!recordAfter && recordBefore) {
+      return { lat: recordBefore.lat, lng: recordBefore.lng };
+    }
+
+    if (recordBefore && recordAfter) {
+      const diffBefore = Math.abs(time.getTime() - new Date(recordBefore.timestamp).getTime());
+      const diffAfter = Math.abs(new Date(recordAfter.timestamp).getTime() - time.getTime());
+
+      if (diffBefore <= diffAfter) {
+        return { lat: recordBefore.lat, lng: recordBefore.lng };
+      } else {
+        return { lat: recordAfter.lat, lng: recordAfter.lng };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Retrieves media logs with geographical coordinates (lat IS NOT NULL) within a time range.
+   */
+  async findMapPins(
+    query: { deviceId?: string; from?: string; to?: string },
+    requesterId: string,
+    isAdmin: boolean,
+  ): Promise<MediaLog[]> {
+    const { deviceId, from, to } = query;
+    const qb = this.mediaLogRepository.createQueryBuilder('mediaLog');
+
+    qb.where('mediaLog.lat IS NOT NULL');
+
+    if (!isAdmin) {
+      qb.innerJoin(
+        Device,
+        'd',
+        'd.id = mediaLog.deviceId AND d.ownerId = :requesterId',
+        { requesterId },
+      );
+      if (deviceId) {
+        qb.andWhere('mediaLog.deviceId = :deviceId', { deviceId });
+      }
+    } else {
+      if (deviceId) {
+        qb.andWhere('mediaLog.deviceId = :deviceId', { deviceId });
+      }
+    }
+
+    if (from) qb.andWhere('mediaLog.startTime >= :from', { from });
+    if (to) qb.andWhere('mediaLog.startTime <= :to', { to });
+
+    return qb.orderBy('mediaLog.startTime', 'DESC').getMany();
   }
 
   /**

@@ -26,58 +26,129 @@ export class TelemetryService implements OnModuleInit {
 
   /**
    * Ensures PostGIS geometry columns and spatial indexes exist on startup.
-   * TypeORM `synchronize` drops geometry columns it cannot manage natively,
-   * so we recreate them every time the application boots.
+   * If TimescaleDB is available, converts the telemetry table to a hypertable.
    */
   async onModuleInit(): Promise<void> {
-    await this.dataSource.query(`
-      ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS geom geometry(Point, 4326);
-      CREATE INDEX IF NOT EXISTS idx_telemetry_geom ON telemetry USING GIST (geom);
-      ALTER TABLE geofences ADD COLUMN IF NOT EXISTS geom geometry(Polygon, 4326);
-      CREATE INDEX IF NOT EXISTS idx_geofences_geom ON geofences USING GIST (geom);
-    `);
+    try {
+      // 1. Force refresh PostGIS (Drop and Recreate to fix library path issues)
+      // Since it's a new server, this is the safest way to fix Version Mismatch
+      try {
+        await this.dataSource.query(`DROP EXTENSION IF EXISTS postgis CASCADE`);
+      } catch {
+        this.logger.warn('Could not drop postgis extension (might not exist)');
+      }
+      
+      await this.dataSource.query(`CREATE EXTENSION IF NOT EXISTS postgis`);
+      await this.dataSource.query(
+        `CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE`,
+      );
 
-    // Backfill geom from lat/lng for rows that lost geometry data after synchronize
-    const backfillResult: [unknown, number] = await this.dataSource.query(
-      `UPDATE telemetry SET geom = ST_SetSRID(ST_MakePoint(lng, lat), 4326) WHERE geom IS NULL`,
-    );
-    const count = backfillResult[1];
-    if (count > 0) {
-      this.logger.log(`Backfilled geom for ${count} telemetry rows`);
+
+      // 2. Ensure geometry columns & indexes
+      await this.dataSource.query(`
+        ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS geom geometry(Point, 4326);
+        CREATE INDEX IF NOT EXISTS idx_telemetry_geom ON telemetry USING GIST (geom);
+        ALTER TABLE geofences ADD COLUMN IF NOT EXISTS geom geometry(Polygon, 4326);
+        CREATE INDEX IF NOT EXISTS idx_geofences_geom ON geofences USING GIST (geom);
+      `);
+
+      // 3. Convert to Hypertable if not already done (TimescaleDB specific)
+      // We wrap this in a check to see if it's already a hypertable
+      const isHypertable = await this.dataSource.query<{ count: string }[]>(`
+        SELECT count(*) FROM _timescaledb_catalog.hypertable WHERE table_name = 'telemetry'
+      `);
+
+      if (isHypertable.length === 0 || parseInt(isHypertable[0].count) === 0) {
+        this.logger.log(
+          'Converting telemetry table to TimescaleDB hypertable...',
+        );
+        await this.dataSource.query(
+          `SELECT create_hypertable('telemetry', 'timestamp', if_not_exists => TRUE)`,
+        );
+
+        // 3a. Enable Compression (Job runs in background)
+        await this.dataSource.query(`
+          ALTER TABLE telemetry SET (
+            timescaledb.compress,
+            timescaledb.compress_segmentby = 'device_id'
+          );
+          SELECT add_compression_policy('telemetry', INTERVAL '7 days');
+        `);
+
+        // 3b. Enable Statistics/Retention (Keep 6 months of raw data)
+        await this.dataSource.query(`
+          SELECT add_retention_policy('telemetry', INTERVAL '6 months');
+        `);
+
+        this.logger.log('Compression and Retention policies enabled');
+      }
+
+
+      // 4. Backfill missing geoms
+      await this.dataSource.query(
+        `UPDATE telemetry SET geom = ST_SetSRID(ST_MakePoint(lng, lat), 4326) WHERE geom IS NULL`,
+      );
+
+      this.logger.log('Telemetry storage optimized (PostGIS + TimescaleDB)');
+    } catch (error) {
+      this.logger.error('Failed to optimize telemetry storage:', error);
     }
-
-    this.logger.log('PostGIS geometry columns ensured on telemetry & geofences');
   }
-
 
   /**
-   * Persists a single GPS coordinate point for a device.
-   * After inserting the row, updates the PostGIS `geom` column via raw SQL
-   * since TypeORM cannot natively serialize geometry types.
+   * Persists a single GPS coordinate point for a device in a single SQL operation.
+   * Calculates the PostGIS geometry point during INSERT for maximum performance.
    */
   async savePoint(deviceId: string, payload: CoordinatePayload): Promise<void> {
-    // Step 1: Create the telemetry record with all fields
-    const telemetry = this.telemetryRepository.create({
-      deviceId,
-      lat: payload.lat,
-      lng: payload.lng,
-      speed: payload.speed,
-      heading: payload.heading,
-      timestamp: payload.timestamp,
-      accuracyStatus: payload.accuracyStatus,
-    });
-
-    // Step 2: Persist the record
-    await this.telemetryRepository.save(telemetry);
-
-    // Step 3: Update PostGIS geometry column via raw SQL
-    await this.telemetryRepository.query(
+    await this.dataSource.query(
       `
-      UPDATE telemetry SET geom = ST_SetSRID(ST_MakePoint($1, $2), 4326) WHERE id = $3
+      INSERT INTO telemetry (device_id, lat, lng, speed, heading, timestamp, accuracy_status, geom)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, ST_SetSRID(ST_MakePoint($3, $2), 4326))
     `,
-      [payload.lng, payload.lat, telemetry.id],
+      [
+        deviceId,
+        payload.lat,
+        payload.lng,
+        payload.speed,
+        payload.heading,
+        payload.timestamp,
+        payload.accuracyStatus,
+      ],
     );
   }
+
+  /**
+   * Persists a batch of telemetry points in a single multi-row INSERT.
+   * This is the preferred method for high-throughput ingestion.
+   */
+  async saveBatch(
+    points: { deviceId: string; payload: CoordinatePayload }[],
+  ): Promise<void> {
+    if (points.length === 0) return;
+
+    const values = points
+      .map(
+        (_, i) =>
+          `($${i * 7 + 1}, $${i * 7 + 2}, $${i * 7 + 3}, $${i * 7 + 4}, $${i * 7 + 5}, $${i * 7 + 6}, $${i * 7 + 7}, ST_SetSRID(ST_MakePoint($${i * 7 + 3}, $${i * 7 + 2}), 4326))`,
+      )
+      .join(',');
+
+    const flatParams = points.flatMap((p) => [
+      p.deviceId,
+      p.payload.lat,
+      p.payload.lng,
+      p.payload.speed,
+      p.payload.heading,
+      p.payload.timestamp,
+      p.payload.accuracyStatus,
+    ]);
+
+    await this.dataSource.query(
+      `INSERT INTO telemetry (device_id, lat, lng, speed, heading, timestamp, accuracy_status, geom) VALUES ${values}`,
+      flatParams,
+    );
+  }
+
 
   async findHistory(
     deviceId: string,

@@ -1,7 +1,7 @@
 services:
   postgres:
     container_name: gnss-postgres
-    image: ${POSTGIS_IMAGE:-postgis/postgis:17-3.5}
+    image: ${POSTGIS_IMAGE:-timescale/timescaledb:latest-pg17}
     restart: always
     env_file:
       - .env
@@ -126,7 +126,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "rpk cluster health --brokers=localhost:29092 >/dev/null 2>&1 || exit 1",
+          "rpk cluster health >/dev/null 2>&1 || exit 1",
         ]
       interval: 10s
       timeout: 5s
@@ -189,7 +189,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "wget -q -O /dev/null http://localhost:9333/cluster/status || exit 1",
+          "wget -q -O /dev/null http://$$HOSTNAME:9333/cluster/status || exit 1",
         ]
       interval: 10s
       timeout: 5s
@@ -242,19 +242,19 @@ services:
     networks:
       - datn_gnss
 
-  kafka-ui:
-    container_name: gnss-kafka-ui
-    image: ${KAFKA_UI_IMAGE:-provectuslabs/kafka-ui:latest}
-    ports:
-      - "${KAFKA_UI_PORT:-8088}:8080"
-    environment:
-      KAFKA_CLUSTERS_0_NAME: local
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: redpanda:29092
-      DYNAMIC_CONFIG_ENABLED: "true"
-    networks:
-      - datn_gnss
-    depends_on:
-      - redpanda
+#   kafka-ui:
+#     container_name: gnss-kafka-ui
+#     image: ${KAFKA_UI_IMAGE:-provectuslabs/kafka-ui:latest}
+#     ports:
+#       - "${KAFKA_UI_PORT:-8088}:8080"
+#     environment:
+#       KAFKA_CLUSTERS_0_NAME: local
+#       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: redpanda:29092
+#       DYNAMIC_CONFIG_ENABLED: "true"
+#     networks:
+#       - datn_gnss
+#     depends_on:
+#       - redpanda
 
 volumes:
   pgdata:

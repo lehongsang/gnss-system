@@ -20,7 +20,7 @@ services:
       - "${MEDIAMTX_RTSP_PORT:-8554}:8554"
       - "${MEDIAMTX_WEBRTC_PORT:-8889}:8889"
 
-  kafka-ui:
-    profiles:
-      - tools
-    ports: !reset []
+#   kafka-ui:
+#     profiles:
+#       - tools
+#     ports: !reset []
