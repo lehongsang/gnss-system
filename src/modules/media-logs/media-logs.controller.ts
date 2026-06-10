@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Param, Query, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Param, Query, Body, UseGuards, Req, ForbiddenException } from '@nestjs/common';
+import { Request } from 'express';
 import { MediaLogsService } from './media-logs.service';
 import { MediaLogQueryDto } from './dtos/query-media-log.dto';
 import { RequestUploadUrlDto } from './dtos/request-upload-url.dto';
@@ -9,6 +10,7 @@ import { Role, ALL_ROLES } from '@/commons/enums/app.enum';
 import { User } from '@/modules/auth/entities/user.entity';
 import { Doc } from '@/commons/docs/doc.decorator';
 import { DeviceAuthGuard } from '@/commons/guards/device-auth.guard';
+import { Device } from '@/modules/devices/entities/device.entity';
 
 @ApiTags('Media Logs')
 @Controller('media-logs')
@@ -76,6 +78,26 @@ export class MediaLogsController {
   ) {
     const isAdmin = user.role === Role.ADMIN;
     return this.mediaLogsService.getStreamUrl(id, user.id, isAdmin, type || 'raw');
+  }
+
+  @Get(':id/device-stream')
+  @UseGuards(DeviceAuthGuard)
+  @Doc({
+    summary: 'Device - Get media log stream url',
+    description: 'Allows a device to get a stream URL for its own media log. Basic Authentication required.',
+  })
+  async getDeviceStreamUrl(
+    @Param('id') id: string,
+    @Req() request: Request & { device: Device },
+    @Query('type') type?: 'raw' | 'processed',
+  ) {
+    const device = request.device;
+    // Bypass user ownership check by passing isAdmin = true, but strictly verify device ownership
+    const log = await this.mediaLogsService.findOne(id, '', true);
+    if (log.deviceId !== device.id) {
+      throw new ForbiddenException('Device ID mismatch. You cannot access media logs of another device.');
+    }
+    return this.mediaLogsService.getStreamUrl(id, '', true, type || 'raw');
   }
 
   @Post(':id/analyze')
