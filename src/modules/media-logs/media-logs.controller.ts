@@ -69,9 +69,34 @@ export class MediaLogsController {
   @Get(':id/stream')
   @Roles(ALL_ROLES)
   @Doc({ summary: 'Role: All - Get media log stream url' })
-  getStreamUrl(@Param('id') id: string, @Session() { user }: { user: User }) {
+  getStreamUrl(
+    @Param('id') id: string,
+    @Session() { user }: { user: User },
+    @Query('type') type?: 'raw' | 'processed',
+  ) {
     const isAdmin = user.role === Role.ADMIN;
-    return this.mediaLogsService.getStreamUrl(id, user.id, isAdmin);
+    return this.mediaLogsService.getStreamUrl(id, user.id, isAdmin, type || 'raw');
+  }
+
+  @Post(':id/analyze')
+  @Roles(ALL_ROLES)
+  @Doc({
+    summary: 'Role: All - Trigger Optical Flow AI processing for a video log',
+    description: 'Triggers the Python AI local worker via Kafka to estimate motion on the video chunk.',
+  })
+  analyze(
+    @Param('id') id: string,
+    @Session() { user }: { user: User },
+    @Body() body: { mode?: 'VECTORS' | 'HEATMAP'; isMoving?: boolean },
+  ) {
+    const isAdmin = user.role === Role.ADMIN;
+    return this.mediaLogsService.requestOpticalFlowAnalysis(
+      id,
+      user.id,
+      isAdmin,
+      body.mode || 'VECTORS',
+      body.isMoving !== undefined ? body.isMoving : true,
+    );
   }
 }
 

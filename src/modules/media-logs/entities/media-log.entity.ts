@@ -71,6 +71,24 @@ export class MediaLog extends BaseEntity {
   @IsString()
   snapshotId: string | null;
 
+  @ApiPropertyOptional({ description: 'S3 object key for the AI processed video' })
+  @Column({ type: 'varchar', nullable: true, name: 'processed_s3_key' })
+  @IsOptional()
+  @IsString()
+  processedS3Key: string | null;
+
+  @ApiPropertyOptional({ description: 'AI processing status' })
+  @Column({ type: 'varchar', nullable: true, name: 'processing_status' })
+  @IsOptional()
+  @IsString()
+  processingStatus: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | null;
+
+  @ApiPropertyOptional({ description: 'Error message if processing failed' })
+  @Column({ type: 'text', nullable: true, name: 'processing_error' })
+  @IsOptional()
+  @IsString()
+  processingError: string | null;
+
   @ApiPropertyOptional()
   @DeleteDateColumn({ name: 'deleted_at' })
   deletedAt: Date | null;
