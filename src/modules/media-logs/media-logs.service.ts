@@ -21,6 +21,8 @@ import { ConfirmUploadDto, ConfirmMediaType } from './dtos/confirm-upload.dto';
 import { MediaType } from './entities/media-log.entity';
 import { LoggerService } from '@/commons/logger/logger.service';
 import { AlertsService } from '@/modules/alerts/alerts.service';
+import { KafkaService } from '@/services/kafka/kafka.service';
+import { KafkaTopic } from '@/services/kafka/kafka.enum';
 import {
   ListObjectsV2Command,
   DeleteObjectCommand,
@@ -36,6 +38,7 @@ export class MediaLogsService implements OnModuleInit {
     private readonly devicesService: DevicesService,
     private readonly storageService: StorageService,
     private readonly alertsService: AlertsService,
+    private readonly kafkaService: KafkaService,
   ) {}
 
   /**
@@ -126,22 +129,81 @@ export class MediaLogsService implements OnModuleInit {
     id: string,
     requesterId: string,
     isAdmin: boolean,
+    type: 'raw' | 'processed' = 'raw',
   ): Promise<{ url: string }> {
     const log = await this.findOne(id, requesterId, isAdmin);
 
-    if (log.s3Key && log.s3Key.startsWith('mock/') && log.fileUrl) {
+    const s3KeyToUse = type === 'processed' ? log.processedS3Key : log.s3Key;
+
+    if (!s3KeyToUse) {
+      if (type === 'processed') {
+        throw new NotFoundException('Processed video not found or not yet analyzed by AI');
+      }
+      throw new NotFoundException('Media S3 key not found');
+    }
+
+    if (type === 'raw' && log.s3Key && log.s3Key.startsWith('mock/') && log.fileUrl) {
       return { url: log.fileUrl };
     }
 
     // Generate a presigned GET URL valid for 1 hour (3600s)
-    const presignedUrl = await this.storageService.getPresignedUrl(log.s3Key);
+    const presignedUrl = await this.storageService.getPresignedUrl(s3KeyToUse);
     if (!presignedUrl) {
       throw new NotFoundException(
-        'Unable to generate stream URL — media file may have been deleted from storage',
+        `Unable to generate stream URL for ${type} media`,
       );
     }
 
     return { url: presignedUrl };
+  }
+
+  /**
+   * Request asynchronous Optical Flow processing using the local AI worker via Kafka
+   */
+  async requestOpticalFlowAnalysis(
+    id: string,
+    requesterId: string,
+    isAdmin: boolean,
+    mode: 'VECTORS' | 'HEATMAP' = 'VECTORS',
+    isMoving = true,
+  ): Promise<{ jobId: string; status: string }> {
+    const log = await this.findOne(id, requesterId, isAdmin);
+
+    if (log.mediaType !== MediaType.VIDEO_CHUNK) {
+      throw new BadRequestException('Only video logs can be processed with Optical Flow');
+    }
+
+    log.processingStatus = 'pending';
+    log.processingError = null;
+    await this.mediaLogRepository.save(log);
+
+    // Send processing request to Kafka
+    const jobPayload = {
+      jobId: log.id,
+      deviceId: log.deviceId,
+      inputS3Key: log.s3Key,
+      mode: mode,
+      isMoving: isMoving,
+    };
+
+    try {
+      await this.kafkaService.produce(KafkaTopic.GNSS_MEDIA_PROCESS_JOB, [
+        {
+          key: log.id,
+          value: JSON.stringify(jobPayload),
+        },
+      ]);
+      this.logger.log(`Published optical flow job request to Kafka for MediaLog ${log.id}`);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Failed to publish optical flow job to Kafka for MediaLog ${log.id}`, err);
+      log.processingStatus = 'failed';
+      log.processingError = `Kafka produce error: ${errMsg}`;
+      await this.mediaLogRepository.save(log);
+      throw err;
+    }
+
+    return { jobId: log.id, status: 'pending' };
   }
 
   /**
