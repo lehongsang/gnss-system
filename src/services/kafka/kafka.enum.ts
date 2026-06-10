@@ -34,6 +34,10 @@ export enum KafkaTopic {
   GNSS_DEVICE_STATUS = 'gnss.device.status',
   /** Dead-letter queue for failed device status updates */
   GNSS_DEVICE_STATUS_DLQ = 'gnss.device.status.dlq',
+  /** Asynchronous video processing job request */
+  GNSS_MEDIA_PROCESS_JOB = 'gnss.media.process.jobs',
+  /** Asynchronous video processing job result */
+  GNSS_MEDIA_PROCESS_RESULT = 'gnss.media.process.results',
 }
 
 /**
@@ -48,4 +52,5 @@ export enum KafkaConsumerGroup {
   GNSS_ALERTS = 'gnss.alerts.group',
   GNSS_MEDIA_UPLOAD = 'gnss.media.upload.group',
   GNSS_DEVICE_STATUS = 'gnss.device.status.group',
+  GNSS_MEDIA_PROCESS_RESULT = 'gnss.media.process.results.group',
 }
