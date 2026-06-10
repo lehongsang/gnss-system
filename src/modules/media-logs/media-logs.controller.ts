@@ -79,21 +79,19 @@ export class MediaLogsController {
   }
 
   @Post(':id/analyze')
-  @Roles(ALL_ROLES)
+  @UseGuards(DeviceAuthGuard)
   @Doc({
-    summary: 'Role: All - Trigger Optical Flow AI processing for a video log',
-    description: 'Triggers the Python AI local worker via Kafka to estimate motion on the video chunk.',
+    summary: 'Device - Trigger Optical Flow AI processing for a video log',
+    description: 'Triggers the Python AI local worker via Kafka to estimate motion on the video chunk. Basic Authentication required.',
   })
   analyze(
     @Param('id') id: string,
-    @Session() { user }: { user: User },
     @Body() body: { mode?: 'VECTORS' | 'HEATMAP'; isMoving?: boolean },
   ) {
-    const isAdmin = user.role === Role.ADMIN;
     return this.mediaLogsService.requestOpticalFlowAnalysis(
       id,
-      user.id,
-      isAdmin,
+      '',
+      true, // Admin bypass to allow device trigger
       body.mode || 'VECTORS',
       body.isMoving !== undefined ? body.isMoving : true,
     );

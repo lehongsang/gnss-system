@@ -6,6 +6,7 @@ import { EachMessageHandler } from 'kafkajs';
 import { KafkaConsumerGroup, KafkaTopic } from '@/services/kafka/kafka.enum';
 import { LoggerService } from '@/commons/logger/logger.service';
 import { MediaLog } from './entities/media-log.entity';
+import { MqttService } from '@/services/mqtt/mqtt.service';
 
 interface OpticalFlowResultMessage {
   jobId: string;
@@ -20,6 +21,7 @@ export class OpticalFlowResultConsumer implements OnModuleInit {
 
   constructor(
     private readonly kafkaService: KafkaService,
+    private readonly mqttService: MqttService,
     @InjectRepository(MediaLog)
     private readonly mediaLogRepository: Repository<MediaLog>,
   ) {}
@@ -73,6 +75,20 @@ export class OpticalFlowResultConsumer implements OnModuleInit {
 
       await this.mediaLogRepository.save(log);
       this.logger.log(`Successfully updated AI processing status for MediaLog ${payload.jobId} to ${payload.status}`);
+
+      // Push notification via MQTT
+      const mqttTopic = `gnss/${log.deviceId}/media/result`;
+      try {
+        await this.mqttService.publishJson(mqttTopic, {
+          jobId: payload.jobId,
+          status: payload.status,
+          outputS3Key: payload.outputS3Key,
+          error: payload.error
+        });
+        this.logger.log(`Published processing result to MQTT topic ${mqttTopic}`);
+      } catch (mqttErr) {
+        this.logger.error(`Failed to publish MQTT notification to ${mqttTopic}: ${mqttErr}`);
+      }
 
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
