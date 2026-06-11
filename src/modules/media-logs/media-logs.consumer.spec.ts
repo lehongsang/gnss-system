@@ -30,6 +30,7 @@ describe('MediaLogsConsumer', () => {
 
   const mockMediaLogsService = {
     create: jest.fn(),
+    requestOpticalFlowAnalysis: jest.fn().mockResolvedValue({ jobId: 'job-123', status: 'pending' }),
   };
 
   const mockAlertsService = {
@@ -121,6 +122,7 @@ describe('MediaLogsConsumer', () => {
         'snap-123',
         'saved-media-log-id',
       );
+      expect(mockMediaLogsService.requestOpticalFlowAnalysis).not.toHaveBeenCalled();
     });
 
     it('should successfully parse enveloped base64 video and map to VIDEO_CHUNK', async () => {
@@ -174,6 +176,11 @@ describe('MediaLogsConsumer', () => {
       });
 
       expect(mockAlertsService.linkSnapshotMedia).not.toHaveBeenCalled();
+      expect(mockMediaLogsService.requestOpticalFlowAnalysis).toHaveBeenCalledWith(
+        'saved-video-log-id',
+        'device-id-abc',
+        true,
+      );
     });
 
     it('should catch errors gracefully and forward original raw payload to DLQ topic', async () => {

@@ -40,7 +40,7 @@ async function bootstrap() {
   const corsOrigins = configService
     .get<string>('CORS_ORIGINS', frontendUrl || '')
     .split(',')
-    .map((origin) => origin.trim())
+    .map((origin: string) => origin.trim())
     .filter(Boolean);
 
   // Configure CORS
@@ -95,6 +95,14 @@ async function bootstrap() {
           in: 'header',
         },
         'bearer',
+      )
+      .addBasicAuth(
+        {
+          type: 'http',
+          scheme: 'basic',
+          description: 'Enter device credentials (username: device:deviceId, password: MQTT password)',
+        },
+        'device-basic',
       )
       .setExternalDoc('Authentication Docs', 'auth/docs')
       .build();

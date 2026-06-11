@@ -1,6 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsEnum,
+  IsLatitude,
+  IsLongitude,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -51,4 +53,20 @@ export class ConfirmUploadDto {
   @IsString()
   @MaxLength(128)
   snapshotId?: string;
+
+  @ApiProperty({
+    description: 'Optional latitude where media was recorded',
+    required: false,
+  })
+  @IsOptional()
+  @IsLatitude()
+  lat?: number;
+
+  @ApiProperty({
+    description: 'Optional longitude where media was recorded',
+    required: false,
+  })
+  @IsOptional()
+  @IsLongitude()
+  lng?: number;
 }

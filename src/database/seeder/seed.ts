@@ -1,3 +1,10 @@
+import * as crypto from 'crypto';
+if (!global.crypto) {
+  Object.defineProperty(global, 'crypto', {
+    value: crypto.webcrypto || crypto,
+  });
+}
+
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '@/app.module';
 import { DataSource } from 'typeorm';
@@ -230,6 +237,8 @@ async function bootstrap() {
       const timestamp = new Date(
         currentTime.getTime() - Math.random() * 3 * 24 * 3600 * 1000,
       );
+      const lat = 21.0285 + (Math.random() * 0.1 - 0.05);
+      const lng = 105.8542 + (Math.random() * 0.1 - 0.05);
       mediaLogs.push({
         id: uuidv7(),
         deviceId: device.id,
@@ -240,10 +249,16 @@ async function bootstrap() {
         fileUrl: isImage
           ? `https://loremflickr.com/800/600/street,traffic,car?lock=${Math.floor(Math.random() * 1000)}`
           : 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+        lat,
+        lng,
       });
     }
     await mediaLogRepo.save(mediaLogs);
-    logger.log(`Seeded media logs for device ${device.name}`);
+    await dataSource.query(
+      `UPDATE media_logs SET geom = ST_SetSRID(ST_MakePoint(lng, lat), 4326) WHERE device_id = $1 AND geom IS NULL`,
+      [device.id],
+    );
+    logger.log(`Seeded media logs (with geo-tags) for device ${device.name}`);
 
     // Alerts
     const alertRepo = dataSource.getRepository(Alert);

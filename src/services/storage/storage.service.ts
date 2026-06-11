@@ -139,7 +139,7 @@ export class StorageService {
       }
     } else {
       const presignedPutUrl = await getSignedUrl(
-        this.s3Client,
+        this.signingClient,
         new PutObjectCommand({
           Bucket: this.bucket,
           Key: key,
@@ -285,7 +285,7 @@ export class StorageService {
       ContentType: mimeType,
     });
 
-    return await getSignedUrl(this.s3Client, command, {
+    return await getSignedUrl(this.signingClient, command, {
       expiresIn: expiresInSeconds,
     });
   }

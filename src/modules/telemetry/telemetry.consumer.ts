@@ -7,7 +7,7 @@ import { AlertsService } from '@/modules/alerts/alerts.service';
 import { GeofencesService } from '@/modules/geofences/geofences.service';
 import { RouteDeviationService } from '@/modules/route-plans/route-deviation.service';
 import { RedisService } from '@/services/redis/redis.service';
-import { EachMessageHandler } from 'kafkajs';
+import { EachBatchHandler } from 'kafkajs';
 import { KafkaConsumerGroup, KafkaTopic } from '@/services/kafka/kafka.enum';
 import { LoggerService } from '@/commons/logger/logger.service';
 import { AlertType } from '@/commons/enums/app.enum';
@@ -43,109 +43,96 @@ export class TelemetryConsumer implements OnModuleInit {
   ) {}
 
   /**
-   * Registers the Kafka consumer on application bootstrap.
-   * Subscribes to GNSS_COORDINATES with a dedicated consumer group.
+   * Registers the Kafka batch consumer on application bootstrap.
    */
   async onModuleInit(): Promise<void> {
-    await this.kafkaService.consume(
+    await this.kafkaService.consumeBatch(
       KafkaTopic.GNSS_COORDINATES,
       KafkaConsumerGroup.GNSS_COORDINATES,
-      this.handleMessage,
+      this.handleBatch,
     );
     this.logger.log(
-      `Telemetry Consumer initialized and listening on topic: ${KafkaTopic.GNSS_COORDINATES}`,
+      `Telemetry Consumer initialized in BATCH mode on topic: ${KafkaTopic.GNSS_COORDINATES}`,
     );
   }
 
   /**
-   * Processes each incoming coordinate message:
-   * 1. Parses the JSON payload from Kafka
-   * 2. Builds the CoordinatePayload and persists via TelemetryService
-   * 3. Broadcasts the telemetry update via WebSocket to subscribed clients
-   * 4. Checks speed against device limit and creates SPEEDING alert if exceeded
+   * Processes a batch of incoming coordinate messages:
+   * 1. Parses and validates all items in the batch.
+   * 2. Persists all valid points to TimescaleDB in a single multi-row INSERT.
+   * 3. Broadcasts updates via WebSocket and triggers async violations checks.
    */
-  private handleMessage: EachMessageHandler = async ({
-    partition,
-    message,
-  }) => {
-    if (!message.value) return;
+  private handleBatch: EachBatchHandler = async ({ batch }) => {
+    const validPoints: { deviceId: string; payload: CoordinatePayload }[] = [];
+    const partition = batch.partition;
 
-    const rawValue = message.value.toString();
-    const offset = message.offset;
+    for (const message of batch.messages) {
+      if (!message.value) continue;
 
-    try {
-      // Step 1: Parse envelope and extract payload
-      const rawObject = JSON.parse(rawValue) as GnssKafkaEnvelope<unknown>;
-      if (!rawObject || !rawObject.payload) {
-        throw new Error('Invalid GnssKafkaEnvelope structure: missing payload');
-      }
-      const data = await PayloadValidator.validate(TelemetryPayloadDto, rawObject.payload);
-
-      // Step 2: Build the CoordinatePayload expected by the service
-      const payload: CoordinatePayload = {
-        lng: data.lng,
-        lat: data.lat,
-        speed: data.speed,
-        heading: data.heading,
-        timestamp: new Date(data.timestamp),
-        accuracyStatus: 'gnss_only' as AccuracyStatus,
-      };
-
-      // Step 3: Persist the telemetry point
-      await this.telemetryService.savePoint(data.deviceId, payload);
-
-      // Step 4: Broadcast via WebSocket to clients watching this device
-      this.gnssGateway.broadcastTelemetry(data.deviceId, {
-        lat: payload.lat,
-        lng: payload.lng,
-        speed: payload.speed,
-        heading: payload.heading,
-        timestamp: payload.timestamp,
-      });
-
-      // Step 5: Server-side speed detection
-      await this.checkSpeedViolation(data.deviceId, payload);
-
-      // Step 6: Server-side geofence detection
-      await this.checkGeofenceViolation(data.deviceId, payload);
-
-      // Step 7: Server-side active route deviation detection
-      await this.checkRouteDeviation(data.deviceId, payload);
-
-      this.logger.log(
-        `[P:${partition}][Offset:${offset}] Saved + broadcast telemetry for device ${data.deviceId}`,
-      );
-    } catch (error) {
-      this.logger.error(
-        `Failed to process telemetry message at offset ${offset}`,
-        error instanceof Error ? error.stack : error,
-      );
-
-      // Apply Dead Letter Queue (DLQ)
       try {
-        const dlqPayload = {
-          originalPayload: rawValue,
-          error: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-          topic: KafkaTopic.GNSS_COORDINATES,
-          partition,
-          offset,
-          failedAt: new Date().toISOString(),
+        const rawValue = message.value.toString();
+        const rawObject = JSON.parse(rawValue) as GnssKafkaEnvelope<unknown>;
+        const data = await PayloadValidator.validate(
+          TelemetryPayloadDto,
+          rawObject.payload,
+        );
+
+        const payload: CoordinatePayload = {
+          lng: data.lng,
+          lat: data.lat,
+          speed: data.speed,
+          heading: data.heading,
+          timestamp: new Date(data.timestamp),
+          accuracyStatus: 'gnss_only' as AccuracyStatus,
         };
 
-        await this.kafkaService.produce(KafkaTopic.GNSS_COORDINATES_DLQ, [
-          {
-            key: message.key?.toString(),
-            value: JSON.stringify(dlqPayload),
-          },
-        ]);
-      } catch (dlqError) {
-        this.logger.error(
-          `Failed to publish telemetry failure to DLQ: ${dlqError instanceof Error ? dlqError.message : String(dlqError)}`,
-        );
+        validPoints.push({ deviceId: data.deviceId, payload });
+
+        // Immediate Broadcast (Real-time feeling)
+        this.gnssGateway.broadcastTelemetry(data.deviceId, {
+          ...payload,
+        });
+      } catch (err) {
+        this.logger.error(`Failed to parse batch message`, err);
       }
     }
+
+    if (validPoints.length === 0) return;
+
+    try {
+      // Step 2: Bulk Persist to TimescaleDB
+      await this.telemetryService.saveBatch(validPoints);
+
+      // Step 3: Run violation checks for each valid point
+      // Optimization: we run these in parallel but they don't block the next batch fetch
+      for (const { deviceId, payload } of validPoints) {
+        this.runAsyncChecks(deviceId, payload).catch((e) =>
+          this.logger.error(`Async checks failed for ${deviceId}`, e),
+        );
+      }
+
+      this.logger.log(
+        `[P:${partition}] Persisted batch of ${validPoints.length} telemetry points`,
+      );
+    } catch (error) {
+      this.logger.error(`Failed to persist telemetry batch`, error);
+    }
   };
+
+  /**
+   * Offloads analysis logic to prevent blocking the main ingestion flow.
+   */
+  private async runAsyncChecks(
+    deviceId: string,
+    payload: CoordinatePayload,
+  ): Promise<void> {
+    await Promise.all([
+      this.checkSpeedViolation(deviceId, payload),
+      this.checkGeofenceViolation(deviceId, payload),
+      this.checkRouteDeviation(deviceId, payload),
+    ]);
+  }
+
 
   /**
    * Checks if the device's speed exceeds its configured speed limit.
@@ -163,14 +150,20 @@ export class TelemetryConsumer implements OnModuleInit {
     if (payload.speed <= 0) return;
 
     try {
-      // Look up the device to get its speed limit configuration
-      const device = await this.devicesService.findOne(deviceId, '', true);
+      // Optimization: Cache device speed limit in Redis for 5 minutes
+      const cacheKey = `device:limit:${deviceId}`;
+      let speedLimitKmh: number | null = null;
 
-      // Skip if no speed limit is configured for this device
-      if (!device.speedLimitKmh) return;
+      const cachedLimit = await this.redisService.get(cacheKey);
+      if (cachedLimit !== null) {
+        speedLimitKmh = parseFloat(cachedLimit);
+      } else {
+        const device = await this.devicesService.findOne(deviceId, '', true);
+        speedLimitKmh = device.speedLimitKmh || 0;
+        await this.redisService.setex(cacheKey, 300, speedLimitKmh.toString());
+      }
 
-      // Skip if speed is within the limit
-      if (payload.speed <= device.speedLimitKmh) return;
+      if (!speedLimitKmh || payload.speed <= speedLimitKmh) return;
 
       // Check Redis cooldown to prevent alert spam
       const cooldownKey = `speeding:${deviceId}`;
@@ -181,7 +174,7 @@ export class TelemetryConsumer implements OnModuleInit {
       await this.alertsService.create({
         deviceId,
         alertType: AlertType.SPEEDING,
-        message: `Vận tốc ${payload.speed.toFixed(1)} km/h vượt ngưỡng ${device.speedLimitKmh} km/h`,
+        message: `Vận tốc ${payload.speed.toFixed(1)} km/h vượt ngưỡng ${speedLimitKmh} km/h`,
         lat: payload.lat,
         lng: payload.lng,
       });
@@ -194,8 +187,9 @@ export class TelemetryConsumer implements OnModuleInit {
       );
 
       this.logger.warn(
-        `SPEEDING detected for device ${deviceId}: ${payload.speed.toFixed(1)} km/h > ${device.speedLimitKmh} km/h`,
+        `SPEEDING detected for device ${deviceId}: ${payload.speed.toFixed(1)} km/h > ${speedLimitKmh} km/h`,
       );
+
     } catch (error) {
       // Speed check failure should not block telemetry processing
       this.logger.warn(

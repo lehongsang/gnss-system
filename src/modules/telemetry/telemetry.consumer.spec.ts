@@ -10,21 +10,22 @@ import { GeofencesService } from '@/modules/geofences/geofences.service';
 import { RouteDeviationService } from '@/modules/route-plans/route-deviation.service';
 import type { Device } from '@/modules/devices/entities/device.entity';
 import { AlertType } from '@/commons/enums/app.enum';
-import type { EachMessageHandler } from 'kafkajs';
+import type { EachBatchHandler } from 'kafkajs';
 
 describe('TelemetryConsumer', () => {
   let consumer: TelemetryConsumer;
-  let handleMessageCallback: EachMessageHandler;
+  let handleBatchCallback: EachBatchHandler;
 
   const mockKafkaService = {
-    consume: jest.fn((topic: string, groupId: string, handler: EachMessageHandler) => {
-      handleMessageCallback = handler;
+    consumeBatch: jest.fn((topic: string, groupId: string, handler: EachBatchHandler) => {
+      handleBatchCallback = handler;
     }),
     produce: jest.fn().mockResolvedValue(null),
   };
 
   const mockTelemetryService = {
     savePoint: jest.fn(),
+    saveBatch: jest.fn().mockResolvedValue(undefined),
   };
 
   const mockGnssGateway = {
@@ -69,7 +70,7 @@ describe('TelemetryConsumer', () => {
 
     consumer = module.get<TelemetryConsumer>(TelemetryConsumer);
 
-    // Initialize the consumer so that handleMessageCallback is registered
+    // Initialize the consumer so that handleBatchCallback is registered
     await consumer.onModuleInit();
   });
 
@@ -99,29 +100,36 @@ describe('TelemetryConsumer', () => {
     };
 
     /**
-     * Test case: Should parse raw message, call savePoint and broadcast via WS
+     * Test case: Should parse raw message, call saveBatch and broadcast via WS
      */
-    it('should parse message, call savePoint and broadcast via WebSocket', async () => {
+    it('should parse message, call saveBatch and broadcast via WebSocket', async () => {
       mockDevicesService.findOne.mockResolvedValue({ id: '019e4a45-b4aa-74ed-b5c2-484b89b18701', speedLimitKmh: 100 } as Device);
       mockGeofencesService.evaluateGeofenceTransitions.mockResolvedValue([]);
 
-      // Step-by-step logic: Call handleMessage and verify service invocations
-      await handleMessageCallback({
-        topic: 'gnss.coordinates',
-        partition: 0,
-        message: mockMessage as any,
-        heartbeat: jest.fn(),
-        pause: jest.fn().mockImplementation(() => jest.fn()),
-      });
+      // Step-by-step logic: Call handleBatch and verify service invocations
+      await handleBatchCallback({
+        batch: {
+          partition: 0,
+          messages: [mockMessage],
+        },
+      } as any);
 
-      expect(mockTelemetryService.savePoint).toHaveBeenCalledWith('019e4a45-b4aa-74ed-b5c2-484b89b18701', {
-        lng: 105.8,
-        lat: 21.0,
-        speed: 95.5,
-        heading: 180,
-        timestamp: new Date('2026-05-27T10:00:00.000Z'),
-        accuracyStatus: 'gnss_only',
-      });
+      // Wait for async checks to complete
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(mockTelemetryService.saveBatch).toHaveBeenCalledWith([
+        {
+          deviceId: '019e4a45-b4aa-74ed-b5c2-484b89b18701',
+          payload: {
+            lng: 105.8,
+            lat: 21.0,
+            speed: 95.5,
+            heading: 180,
+            timestamp: new Date('2026-05-27T10:00:00.000Z'),
+            accuracyStatus: 'gnss_only',
+          },
+        },
+      ]);
 
       expect(mockGnssGateway.broadcastTelemetry).toHaveBeenCalledWith('019e4a45-b4aa-74ed-b5c2-484b89b18701', {
         lat: 21.0,
@@ -129,6 +137,7 @@ describe('TelemetryConsumer', () => {
         speed: 95.5,
         heading: 180,
         timestamp: new Date('2026-05-27T10:00:00.000Z'),
+        accuracyStatus: 'gnss_only',
       });
 
       expect(mockRouteDeviationService.checkDeviation).toHaveBeenCalledWith(
@@ -152,14 +161,16 @@ describe('TelemetryConsumer', () => {
       mockRedisService.get.mockResolvedValue(null); // No cooldown
       mockGeofencesService.evaluateGeofenceTransitions.mockResolvedValue([]);
 
-      // Step-by-step logic: Call handleMessage and check that speeding alert creation is triggered
-      await handleMessageCallback({
-        topic: 'gnss.coordinates',
-        partition: 0,
-        message: mockMessage as any,
-        heartbeat: jest.fn(),
-        pause: jest.fn().mockImplementation(() => jest.fn()),
-      });
+      // Step-by-step logic: Call handleBatch and check that speeding alert creation is triggered
+      await handleBatchCallback({
+        batch: {
+          partition: 0,
+          messages: [mockMessage],
+        },
+      } as any);
+
+      // Wait for async checks to complete
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       expect(mockAlertsService.create).toHaveBeenCalledWith({
         deviceId: '019e4a45-b4aa-74ed-b5c2-484b89b18701',
@@ -180,14 +191,16 @@ describe('TelemetryConsumer', () => {
       mockRedisService.get.mockResolvedValue('1'); // Cooldown active
       mockGeofencesService.evaluateGeofenceTransitions.mockResolvedValue([]);
 
-      // Step-by-step logic: Call handleMessage and expect alertsService.create not to be called
-      await handleMessageCallback({
-        topic: 'gnss.coordinates',
-        partition: 0,
-        message: mockMessage as any,
-        heartbeat: jest.fn(),
-        pause: jest.fn().mockImplementation(() => jest.fn()),
-      });
+      // Step-by-step logic: Call handleBatch and expect alertsService.create not to be called
+      await handleBatchCallback({
+        batch: {
+          partition: 0,
+          messages: [mockMessage],
+        },
+      } as any);
+
+      // Wait for async checks to complete
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       expect(mockAlertsService.create).not.toHaveBeenCalled();
     });
@@ -199,14 +212,16 @@ describe('TelemetryConsumer', () => {
       mockDevicesService.findOne.mockResolvedValue({ id: '019e4a45-b4aa-74ed-b5c2-484b89b18701', speedLimitKmh: 100 } as Device);
       mockGeofencesService.evaluateGeofenceTransitions.mockResolvedValue([]);
 
-      // Step-by-step logic: Speed is 95.5, limit is 100. Call handleMessage and expect no alert.
-      await handleMessageCallback({
-        topic: 'gnss.coordinates',
-        partition: 0,
-        message: mockMessage as any,
-        heartbeat: jest.fn(),
-        pause: jest.fn().mockImplementation(() => jest.fn()),
-      });
+      // Step-by-step logic: Speed is 95.5, limit is 100. Call handleBatch and expect no alert.
+      await handleBatchCallback({
+        batch: {
+          partition: 0,
+          messages: [mockMessage],
+        },
+      } as any);
+
+      // Wait for async checks to complete
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       expect(mockAlertsService.create).not.toHaveBeenCalled();
     });
@@ -218,14 +233,16 @@ describe('TelemetryConsumer', () => {
       mockDevicesService.findOne.mockResolvedValue({ id: '019e4a45-b4aa-74ed-b5c2-484b89b18701', speedLimitKmh: null } as Device);
       mockGeofencesService.evaluateGeofenceTransitions.mockResolvedValue([]);
 
-      // Step-by-step logic: Call handleMessage and expect no alert
-      await handleMessageCallback({
-        topic: 'gnss.coordinates',
-        partition: 0,
-        message: mockMessage as any,
-        heartbeat: jest.fn(),
-        pause: jest.fn().mockImplementation(() => jest.fn()),
-      });
+      // Step-by-step logic: Call handleBatch and expect no alert
+      await handleBatchCallback({
+        batch: {
+          partition: 0,
+          messages: [mockMessage],
+        },
+      } as any);
+
+      // Wait for async checks to complete
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       expect(mockAlertsService.create).not.toHaveBeenCalled();
     });
@@ -239,18 +256,20 @@ describe('TelemetryConsumer', () => {
         offset: '0',
       };
 
-      // Step-by-step logic: Call handleMessage with invalid JSON and expect no throws
+      // Step-by-step logic: Call handleBatch with invalid JSON and expect no throws
       await expect(
-        handleMessageCallback({
-          topic: 'gnss.coordinates',
-          partition: 0,
-          message: invalidMessage as any,
-          heartbeat: jest.fn(),
-          pause: jest.fn().mockImplementation(() => jest.fn()),
-        }),
+        handleBatchCallback({
+          batch: {
+            partition: 0,
+            messages: [invalidMessage],
+          },
+        } as any),
       ).resolves.not.toThrow();
 
-      expect(mockTelemetryService.savePoint).not.toHaveBeenCalled();
+      // Wait for async checks to complete
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(mockTelemetryService.saveBatch).not.toHaveBeenCalled();
     });
   });
 });

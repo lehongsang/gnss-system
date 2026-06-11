@@ -8,6 +8,7 @@ import { MediaLog } from './entities/media-log.entity';
 import { DevicesModule } from '@/modules/devices/devices.module';
 import { StorageModule } from '@/services/storage/storage.module';
 import { AlertsModule } from '@/modules/alerts/alerts.module';
+import { MqttModule } from '@/services/mqtt/mqtt.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { AlertsModule } from '@/modules/alerts/alerts.module';
     DevicesModule,
     StorageModule,
     AlertsModule,
+    MqttModule,
   ],
   controllers: [MediaLogsController],
   providers: [MediaLogsService, MediaLogsConsumer, OpticalFlowResultConsumer],

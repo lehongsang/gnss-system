@@ -13,6 +13,8 @@ import { MediaType } from '@/commons/enums/app.enum';
 import {
   IsDateString,
   IsEnum,
+  IsLatitude,
+  IsLongitude,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -64,6 +66,27 @@ export class MediaLog extends BaseEntity {
   @IsOptional()
   @IsString()
   fileUrl: string | null;
+
+  @ApiPropertyOptional({ description: 'Latitude of the device when recording' })
+  @Column({ type: 'float', nullable: true })
+  @IsOptional()
+  @IsLatitude()
+  lat: number | null;
+
+  @ApiPropertyOptional({ description: 'Longitude of the device when recording' })
+  @Column({ type: 'float', nullable: true })
+  @IsOptional()
+  @IsLongitude()
+  lng: number | null;
+
+  @Column({
+    type: 'geometry',
+    spatialFeatureType: 'Point',
+    srid: 4326,
+    nullable: true,
+    select: false,
+  })
+  geom: string | null;
 
   @ApiPropertyOptional({ description: 'Correlation ID shared with an alert snapshot' })
   @Column({ type: 'varchar', nullable: true, name: 'snapshot_id', length: 128 })

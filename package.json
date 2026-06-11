@@ -24,7 +24,8 @@
     "migration:run": "npm run typeorm -- migration:run -d src/database/ormconfig.ts",
     "migration:generate": "npm run typeorm -- migration:generate -d src/database/ormconfig.ts",
     "migration:revert": "npm run typeorm -- migration:revert -d src/database/ormconfig.ts",
-    "migration:show": "npm run typeorm -- migration:show -d src/database/ormconfig.ts"
+    "migration:show": "npm run typeorm -- migration:show -d src/database/ormconfig.ts",
+    "postinstall": "node -e \"const fs = require('fs'); ['dist/adapters/node/request.cjs', 'dist/adapters/node/request.mjs'].forEach(file => { const path = 'node_modules/better-call/' + file; if (!fs.existsSync(path)) return; let content = fs.readFileSync(path, 'utf8'); if (!content.includes('res.end(); break;')) { content = content.replace('if (done) break;', 'if (done) { res.end(); break; }'); const lastEndIdx = content.lastIndexOf('res.end();'); if (lastEndIdx !== -1) { content = content.substring(0, lastEndIdx) + content.substring(lastEndIdx + 10); } fs.writeFileSync(path, content, 'utf8'); console.log('Patched ' + path); } })\""
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1010.0",

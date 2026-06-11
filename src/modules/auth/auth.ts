@@ -115,11 +115,19 @@ export const getAuth = (
     },
     trustedOrigins: [
       configService.get<string>('FRONTEND_URL', 'http://localhost:5173'),
+      'https://gnss-system-fe-uoc7.vercel.app',
+      'http://localhost:5173',
       'http://localhost:3000',
     ],
     advanced: {
       useSecureCookies: configService.get<string>('NODE_ENV') === 'production',
       disableCSRFCheck: configService.get<string>('NODE_ENV') !== 'production',
+      defaultCookieAttributes: configService.get<string>('NODE_ENV') === 'production'
+        ? {
+            sameSite: 'none',
+            secure: true,
+          }
+        : undefined,
       database: {
         generateId: () => uuidv7(),
       },

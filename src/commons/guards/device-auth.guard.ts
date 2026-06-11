@@ -43,12 +43,13 @@ export class DeviceAuthGuard implements CanActivate {
       throw new UnauthorizedException('Failed to decode Basic auth credentials.');
     }
 
-    const parts = decoded.split(':');
-    if (parts.length !== 2) {
+    const lastColonIndex = decoded.lastIndexOf(':');
+    if (lastColonIndex === -1) {
       throw new UnauthorizedException('Invalid Authorization header format.');
     }
 
-    const [username, password] = parts;
+    const username = decoded.slice(0, lastColonIndex);
+    const password = decoded.slice(lastColonIndex + 1);
     const device = await this.devicesService.verifyMqttCredentials(
       username,
       password,
