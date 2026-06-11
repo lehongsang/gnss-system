@@ -103,6 +103,13 @@ export class MediaLogsConsumer implements OnModuleInit {
         );
       }
 
+      if (mappedMediaType === MediaType.VIDEO_CHUNK) {
+        this.mediaLogsService.requestOpticalFlowAnalysis(savedLog.id, payload.deviceId, true).catch((err: unknown) => {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          this.logger.error(`Failed to auto-trigger optical flow analysis for media log ${savedLog.id}: ${errMsg}`);
+        });
+      }
+
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
       this.logger.error(

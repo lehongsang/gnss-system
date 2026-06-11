@@ -392,6 +392,13 @@ export class MediaLogsService implements OnModuleInit {
       );
     }
 
+    if (mappedMediaType === MediaType.VIDEO_CHUNK) {
+      this.requestOpticalFlowAnalysis(savedLog.id, savedLog.deviceId, true).catch((err: unknown) => {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        this.logger.error(`Failed to auto-trigger optical flow analysis for media log ${savedLog.id}: ${errMsg}`);
+      });
+    }
+
     this.logger.log(
       `Media upload confirmed for device ${dto.deviceId}: ${dto.s3Key} (Size: ${(s3Meta.size / 1024).toFixed(1)} KB, Type: ${dto.mediaType})`,
     );

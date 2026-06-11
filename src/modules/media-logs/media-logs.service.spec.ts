@@ -7,6 +7,7 @@ import { StorageService } from '@/services/storage/storage.service';
 import { AlertsService } from '@/modules/alerts/alerts.service';
 import { ConfirmMediaType } from './dtos/confirm-upload.dto';
 import { MediaType } from './entities/media-log.entity';
+import { KafkaService } from '@/services/kafka/kafka.service';
 
 describe('MediaLogsService', () => {
   let service: MediaLogsService;
@@ -30,6 +31,10 @@ describe('MediaLogsService', () => {
     linkSnapshotMedia: jest.fn(),
   };
 
+  const mockKafkaService = {
+    produce: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module = await Test.createTestingModule({
       providers: [
@@ -49,6 +54,10 @@ describe('MediaLogsService', () => {
         {
           provide: AlertsService,
           useValue: mockAlertsService,
+        },
+        {
+          provide: KafkaService,
+          useValue: mockKafkaService,
         },
       ],
     }).compile();
