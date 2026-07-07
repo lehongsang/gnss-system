@@ -11,6 +11,7 @@ import type { Device } from '@/modules/devices/entities/device.entity';
 import { AlertType } from '@/commons/enums/app.enum';
 import type { EachMessageHandler } from 'kafkajs';
 import type { MediaLog } from '../media-logs/entities/media-log.entity';
+import { TelemetryService } from '@/modules/telemetry/telemetry.service';
 
 describe('AlertsConsumer', () => {
   let consumer: AlertsConsumer;
@@ -19,6 +20,7 @@ describe('AlertsConsumer', () => {
   let gnssGateway: GnssGateway;
   let devicesService: DevicesService;
   let mailService: MailService;
+  let telemetryService: TelemetryService;
   let handleMessageCallback: EachMessageHandler;
 
   const mockKafkaService = {
@@ -45,6 +47,10 @@ describe('AlertsConsumer', () => {
     sendAlertEmail: jest.fn().mockResolvedValue(null),
   };
 
+  const mockTelemetryService = {
+    findLatestByDevice: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module = await Test.createTestingModule({
       providers: [
@@ -54,6 +60,7 @@ describe('AlertsConsumer', () => {
         { provide: GnssGateway, useValue: mockGnssGateway },
         { provide: DevicesService, useValue: mockDevicesService },
         { provide: MailService, useValue: mockMailService },
+        { provide: TelemetryService, useValue: mockTelemetryService },
       ],
     }).compile();
 
@@ -63,6 +70,7 @@ describe('AlertsConsumer', () => {
     gnssGateway = module.get<GnssGateway>(GnssGateway);
     devicesService = module.get<DevicesService>(DevicesService);
     mailService = module.get<MailService>(MailService);
+    telemetryService = module.get<TelemetryService>(TelemetryService);
 
     // Initialize the consumer
     await consumer.onModuleInit();
@@ -291,6 +299,63 @@ describe('AlertsConsumer', () => {
       });
 
       expect(mockAlertsService.create).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Test case: Should lookup latest telemetry coordinates if input coordinates are zero
+     */
+    it('should lookup latest telemetry coordinates if input coordinates are zero', async () => {
+      const zeroCoordsPayload = {
+        ...mockPayload,
+        location: { lat: 0, lng: 0 },
+      };
+      const zeroCoordsEnvelope = {
+        correlationId: 'test-correlation-id',
+        deviceId: 'device-id-123',
+        receivedAt: '2026-05-27T10:00:00.000Z',
+        retryCount: 0,
+        payload: zeroCoordsPayload,
+      };
+      const zeroCoordsMessage = {
+        value: Buffer.from(JSON.stringify(zeroCoordsEnvelope)),
+        offset: '0',
+      };
+
+      const mockTelemetry = { lat: 21.02, lng: 105.83 };
+      const mockAlert = {
+        id: 'alert-id',
+        alertType: AlertType.GEOFENCE_EXIT,
+        message: 'Device left allowed region',
+        lat: 21.02,
+        lng: 105.83,
+      } as Alert;
+
+      const mockDevice = {
+        id: 'device-id-123',
+        name: 'Device 1',
+        ownerId: 'owner-id',
+        owner: { email: 'owner@example.com' },
+      } as unknown as Device;
+
+      mockTelemetryService.findLatestByDevice.mockResolvedValue(mockTelemetry);
+      mockAlertsService.create.mockResolvedValue(mockAlert);
+      mockDevicesService.findOne.mockResolvedValue(mockDevice);
+
+      await handleMessageCallback({
+        topic: 'gnss.alerts',
+        partition: 0,
+        message: zeroCoordsMessage as any,
+        heartbeat: jest.fn(),
+        pause: jest.fn().mockImplementation(() => jest.fn()),
+      });
+
+      expect(mockTelemetryService.findLatestByDevice).toHaveBeenCalledWith('device-id-123');
+      expect(mockAlertsService.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          lat: 21.02,
+          lng: 105.83,
+        }),
+      );
     });
 
     /**
