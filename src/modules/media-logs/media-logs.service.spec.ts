@@ -8,6 +8,7 @@ import { AlertsService } from '@/modules/alerts/alerts.service';
 import { ConfirmMediaType } from './dtos/confirm-upload.dto';
 import { MediaType } from './entities/media-log.entity';
 import { KafkaService } from '@/services/kafka/kafka.service';
+import { ListObjectsV2Command, DeleteObjectCommand } from '@aws-sdk/client-s3';
 
 describe('MediaLogsService', () => {
   let service: MediaLogsService;
@@ -17,6 +18,7 @@ describe('MediaLogsService', () => {
     save: jest.fn(),
     query: jest.fn(),
     createQueryBuilder: jest.fn(),
+    findOne: jest.fn(),
   };
 
   const mockDevicesService = {
@@ -176,4 +178,51 @@ describe('MediaLogsService', () => {
       expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith('mediaLog.startTime <= :to', { to: '2026-01-02' });
     });
   });
+
+  describe('cleanupOrphanedFiles', () => {
+    it('should NOT delete processed AI videos that are referenced in processed_s3_key', async () => {
+      const mockS3Client = {
+        send: jest.fn().mockImplementation((command) => {
+          if (command instanceof ListObjectsV2Command) {
+            return Promise.resolve({
+              Contents: [
+                {
+                  Key: 'media-logs/device-uuid/processed_file.mp4',
+                  LastModified: new Date(Date.now() - 48 * 60 * 60 * 1000), // 48h ago
+                },
+              ],
+            });
+          }
+          return Promise.resolve({});
+        }),
+      };
+
+      mockStorageService.getObjectMetadata.mockResolvedValue(null);
+      (service as any).storageService.getS3Client = () => mockS3Client;
+      (service as any).storageService.getBucket = () => 'test-bucket';
+
+      mockMediaLogRepository.findOne = jest.fn().mockImplementation((options) => {
+        const where = options.where;
+        if (Array.isArray(where)) {
+          const hasProcessedKey = where.some(
+            (cond) => cond.processedS3Key === 'media-logs/device-uuid/processed_file.mp4',
+          );
+          if (hasProcessedKey) {
+            return Promise.resolve({ id: 'log-uuid', processedS3Key: 'media-logs/device-uuid/processed_file.mp4' });
+          }
+        } else if (where && where.processedS3Key === 'media-logs/device-uuid/processed_file.mp4') {
+          return Promise.resolve({ id: 'log-uuid', processedS3Key: 'media-logs/device-uuid/processed_file.mp4' });
+        }
+        return Promise.resolve(null);
+      });
+
+      await service.cleanupOrphanedFiles();
+
+      const deleteCalls = mockS3Client.send.mock.calls.filter(
+        ([command]) => command instanceof DeleteObjectCommand,
+      );
+      expect(deleteCalls.length).toBe(0);
+    });
+  });
 });
+

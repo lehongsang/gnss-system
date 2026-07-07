@@ -50,6 +50,8 @@ export class TelemetryService implements OnModuleInit {
         CREATE INDEX IF NOT EXISTS idx_telemetry_geom ON telemetry USING GIST (geom);
         ALTER TABLE geofences ADD COLUMN IF NOT EXISTS geom geometry(Polygon, 4326);
         CREATE INDEX IF NOT EXISTS idx_geofences_geom ON geofences USING GIST (geom);
+        ALTER TABLE route_plans ADD COLUMN IF NOT EXISTS geom geometry(LineString, 4326);
+        CREATE INDEX IF NOT EXISTS idx_route_plans_geom ON route_plans USING GIST (geom);
       `);
 
       // 3. Convert to Hypertable if not already done (TimescaleDB specific)
@@ -196,6 +198,19 @@ export class TelemetryService implements OnModuleInit {
     if (!latest)
       throw new NotFoundException('No telemetry data found for this device');
     return latest;
+  }
+
+  /**
+   * Returns the latest telemetry point for a device WITHOUT ownership checks.
+   * Used internally by system consumers (e.g., AlertsConsumer) to look up
+   * the most recent GPS coordinates for AI-generated alerts.
+   * Returns null (instead of throwing) when no telemetry exists.
+   */
+  async findLatestByDevice(deviceId: string): Promise<Telemetry | null> {
+    return this.telemetryRepository.findOne({
+      where: { deviceId },
+      order: { timestamp: 'DESC' },
+    });
   }
 
   /**

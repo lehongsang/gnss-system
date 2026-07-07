@@ -16,6 +16,8 @@ import sharp from 'sharp';
 import * as path from 'path';
 import { KafkaTopic } from '@/services/kafka/kafka.enum';
 import { StorageFileQueryDto } from './dtos/query-file.dto';
+import { MediaLog, MediaType } from '@/modules/media-logs/entities/media-log.entity';
+import { Device } from '@/modules/devices/entities/device.entity';
 
 @Injectable()
 export class StorageService {
@@ -315,6 +317,35 @@ export class StorageService {
   }
 
   async getQuota(userId: string, isAdmin: boolean) {
+    let logsCount: { media_type: string; count: string }[] = [];
+    if (isAdmin) {
+      logsCount = await this.mediaRepository.query(`
+        SELECT media_type, COUNT(*) as count 
+        FROM media_logs 
+        WHERE deleted_at IS NULL
+        GROUP BY media_type
+      `);
+    } else {
+      logsCount = await this.mediaRepository.query(`
+        SELECT ml.media_type, COUNT(*) as count 
+        FROM media_logs ml
+        INNER JOIN devices d ON d.id = ml.device_id
+        WHERE d.owner_id = $1 AND ml.deleted_at IS NULL AND d.deleted_at IS NULL
+        GROUP BY ml.media_type
+      `, [userId]);
+    }
+
+    let estimatedLogsSize = 0;
+    for (const row of logsCount) {
+      const count = Number(row.count);
+      if (row.media_type === 'image_frame') {
+        estimatedLogsSize += count * 950 * 1024; // Ước lượng 950 KB mỗi ảnh
+      } else if (row.media_type === 'video_chunk') {
+        estimatedLogsSize += count * 15 * 1024 * 1024; // Ước lượng 15 MB mỗi clip video
+      }
+    }
+
+    // Lấy dung lượng file thủ công (nếu có)
     const qb = this.mediaRepository.createQueryBuilder('media');
     if (!isAdmin) {
       qb.where('media.createdBy = :userId', { userId });
@@ -325,8 +356,8 @@ export class StorageService {
     const totalSize = rawResult?.totalSize;
 
     return {
-      cloudUsageBytes: Number(totalSize || 0),
-      cloudTotalBytes: 100 * 1024 * 1024 * 1024, // 100GB
+      cloudUsageBytes: Number(totalSize || 0) + estimatedLogsSize,
+      cloudTotalBytes: 100 * 1024 * 1024 * 1024, // Hạn mức 100GB
       localBackupBytes: 12.5 * 1024 * 1024 * 1024, // 12.5GB (Mock)
       lastSync: new Date().toISOString(),
     };
@@ -334,41 +365,49 @@ export class StorageService {
 
   async getFiles(query: StorageFileQueryDto, userId: string, isAdmin: boolean) {
     const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'DESC', type, search } = query;
-    const qb = this.mediaRepository.createQueryBuilder('media');
+    const mediaLogRepo = this.mediaRepository.manager.getRepository(MediaLog);
+    const qb = mediaLogRepo.createQueryBuilder('mediaLog');
 
     if (!isAdmin) {
-      qb.andWhere('media.createdBy = :userId', { userId });
+      qb.innerJoin(
+        Device,
+        'd',
+        'd.id = mediaLog.deviceId AND d.ownerId = :userId',
+        { userId },
+      );
     }
 
     if (search) {
-      qb.andWhere('media.originalName ILIKE :search', { search: `%${search}%` });
+      qb.andWhere('mediaLog.s3Key ILIKE :search', { search: `%${search}%` });
     }
 
     if (type) {
-      if (type === 'image') qb.andWhere('media.mimeType LIKE :mime', { mime: 'image/%' });
-      else if (type === 'video') qb.andWhere('media.mimeType LIKE :mime', { mime: 'video/%' });
-      else if (type === 'document') qb.andWhere("media.mimeType IN ('application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')");
-      else if (type === 'archive') qb.andWhere("media.mimeType IN ('application/zip', 'application/x-rar-compressed', 'application/gzip')");
+      if (type === 'image') {
+        qb.andWhere('mediaLog.mediaType = :mediaType', { mediaType: 'image_frame' });
+      } else if (type === 'video') {
+        qb.andWhere('mediaLog.mediaType = :mediaType', { mediaType: 'video_chunk' });
+      }
     }
 
+    const validSortColumns = ['createdAt', 'startTime'];
+    const sortCol = validSortColumns.includes(sortBy) ? `mediaLog.${sortBy}` : 'mediaLog.createdAt';
+
     const [data, total] = await qb
-      .orderBy(`media.${sortBy}`, sortOrder as 'ASC' | 'DESC')
+      .orderBy(sortCol, sortOrder as 'ASC' | 'DESC')
       .skip((page - 1) * limit)
       .take(limit)
       .getManyAndCount();
 
     const formattedData = data.map(item => {
-      let fileType = 'other';
-      if (item.mimeType.startsWith('image/')) fileType = 'image';
-      else if (item.mimeType.startsWith('video/')) fileType = 'video';
-      else if (item.mimeType.includes('pdf') || item.mimeType.includes('word')) fileType = 'document';
-      else if (item.mimeType.includes('zip') || item.mimeType.includes('rar') || item.mimeType.includes('gzip')) fileType = 'archive';
+      const fileType = item.mediaType === MediaType.IMAGE_FRAME ? 'image' : 'video';
+      const estimatedSize = item.mediaType === MediaType.IMAGE_FRAME ? 950 * 1024 : 15 * 1024 * 1024;
+      const basename = path.basename(item.s3Key);
 
       return {
         id: item.id,
-        name: item.originalName,
+        name: basename,
         type: fileType,
-        size: Number(item.size),
+        size: estimatedSize,
         createdAt: item.createdAt,
       };
     });
@@ -440,20 +479,42 @@ export class StorageService {
   }
 
   async getDownloadUrl(id: string, userId: string, isAdmin: boolean) {
-    const media = await this.mediaRepository.findOne({ where: { id } });
-    if (!media) throw new NotFoundException('File not found');
-    if (!isAdmin && media.createdBy !== userId) throw new ForbiddenException('Access denied');
+    const mediaLogRepo = this.mediaRepository.manager.getRepository(MediaLog);
+    const mediaLog = await mediaLogRepo.createQueryBuilder('mediaLog')
+      .leftJoinAndSelect('mediaLog.device', 'device')
+      .where('mediaLog.id = :id', { id })
+      .getOne();
 
-    const url = await this.getPresignedUrl(media.s3Key);
+    if (!mediaLog) throw new NotFoundException('File not found');
+    if (!isAdmin && mediaLog.device?.ownerId !== userId) throw new ForbiddenException('Access denied');
+
+    const url = await this.getPresignedUrl(mediaLog.s3Key);
     return { url };
   }
 
   async deleteGenericFile(id: string, userId: string, isAdmin: boolean) {
-    const media = await this.mediaRepository.findOne({ where: { id } });
-    if (!media) throw new NotFoundException('File not found');
-    if (!isAdmin && media.createdBy !== userId) throw new ForbiddenException('Access denied');
+    const mediaLogRepo = this.mediaRepository.manager.getRepository(MediaLog);
+    const mediaLog = await mediaLogRepo.createQueryBuilder('mediaLog')
+      .leftJoinAndSelect('mediaLog.device', 'device')
+      .where('mediaLog.id = :id', { id })
+      .getOne();
 
-    await this.deleteFile(id);
+    if (!mediaLog) throw new NotFoundException('File not found');
+    if (!isAdmin && mediaLog.device?.ownerId !== userId) throw new ForbiddenException('Access denied');
+
+    const deleteS3 = async (key: string | null) => {
+      if (!key) return;
+      try {
+        await this.s3Client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
+      } catch (err) {
+        this.logger.error(`Failed to delete S3 file: ${key}`, err);
+      }
+    };
+
+    await deleteS3(mediaLog.s3Key);
+    await deleteS3(mediaLog.processedS3Key);
+
+    await mediaLogRepo.softRemove(mediaLog);
     return { message: 'File deleted successfully' };
   }
 }

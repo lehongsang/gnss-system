@@ -502,7 +502,11 @@ export class MediaLogsService implements OnModuleInit {
 
   /**
    * Sweeps the S3 bucket's "media-logs/" prefix, identifying files older than 24 hours
-   * that have no corresponding database record in `media_logs` table, and deletes them.
+   * that have no corresponding database record in the `media_logs` table, and deletes them.
+   *
+   * NOTE: This check must verify BOTH `s3Key` (original upload) and `processedS3Key`
+   * (AI-processed/optical flow results) to avoid deleting AI analysis files that are
+   * saved under the same prefix in the S3 bucket.
    */
   async cleanupOrphanedFiles(): Promise<void> {
     this.logger.log('Starting orphaned media files sweep clean-up...');
@@ -526,9 +530,14 @@ export class MediaLogsService implements OnModuleInit {
         // Only target files older than 24 hours
         if (obj.LastModified > oneDayAgo) continue;
 
-        // Check if a database entry exists for this s3Key
+        // Query database to see if the file key matches either:
+        // 1. The original upload key (s3Key)
+        // 2. The AI-processed output key (processedS3Key)
         const dbRecord = await this.mediaLogRepository.findOne({
-          where: { s3Key: obj.Key },
+          where: [
+            { s3Key: obj.Key },
+            { processedS3Key: obj.Key },
+          ],
         });
 
         if (!dbRecord) {

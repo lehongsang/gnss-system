@@ -40,6 +40,10 @@ export enum AlertType {
   GEOFENCE_ENTRY = 'geofence_entry',
   /** Device is travelling above the allowed speed limit */
   SPEEDING = 'speeding',
+  /** AI-detected sudden motion event (e.g., hard braking, collision) from Optical Flow analysis */
+  SUDDEN_MOTION = 'sudden_motion',
+  /** AI-detected abnormal stop (vehicle stationary while marked as moving) from Optical Flow analysis */
+  ABNORMAL_STOP = 'abnormal_stop',
 }
 
 // ─── Device Status ─────────────────────────────────────────────────────────────

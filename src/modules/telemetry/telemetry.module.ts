@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TelemetryService } from './telemetry.service';
 import { TelemetryConsumer } from './telemetry.consumer';
@@ -17,7 +17,7 @@ import { RoutePlansModule } from '@/modules/route-plans/route-plans.module';
     DevicesModule,
     KafkaModule,
     GnssGatewayModule,
-    AlertsModule,
+    forwardRef(() => AlertsModule),
     GeofencesModule,
     RoutePlansModule,
   ],

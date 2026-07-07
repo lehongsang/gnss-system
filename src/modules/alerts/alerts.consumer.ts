@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit, Inject, forwardRef } from '@nestjs/common';
 import { KafkaService } from '@/services/kafka/kafka.service';
 import { AlertsService } from './alerts.service';
 import { GnssGateway } from '@/gateways/gnss.gateway';
@@ -9,6 +9,7 @@ import { KafkaConsumerGroup, KafkaTopic } from '@/services/kafka/kafka.enum';
 import { LoggerService } from '@/commons/logger/logger.service';
 import type { AlertKafkaPayload, GnssKafkaEnvelope } from '@/commons/interfaces/app.interface';
 import { AlertType } from '@/commons/enums/app.enum';
+import { TelemetryService } from '@/modules/telemetry/telemetry.service';
 
 /**
  * Alert type titles for display in notifications and emails.
@@ -21,6 +22,8 @@ const ALERT_TITLES: Record<AlertType, string> = {
   [AlertType.DANGEROUS_OBSTACLE]: 'Phát hiện chướng ngại vật',
   [AlertType.TRAJECTORY_DEVIATION]: 'Lệch khỏi quỹ đạo',
   [AlertType.GEOFENCE_ENTRY]: 'Restricted zone entry',
+  [AlertType.SUDDEN_MOTION]: 'Phát hiện chuyển động đột ngột (AI)',
+  [AlertType.ABNORMAL_STOP]: 'Dừng xe bất thường (AI)',
 };
 
 /**
@@ -33,6 +36,7 @@ const CRITICAL_ALERT_TYPES: AlertType[] = [
   AlertType.GEOFENCE_ENTRY,
   AlertType.SIGNAL_LOST,
   AlertType.DANGEROUS_OBSTACLE,
+  AlertType.SUDDEN_MOTION,
 ];
 
 /**
@@ -50,6 +54,8 @@ export class AlertsConsumer implements OnModuleInit {
     private readonly gnssGateway: GnssGateway,
     private readonly devicesService: DevicesService,
     private readonly mailService: MailService,
+    @Inject(forwardRef(() => TelemetryService))
+    private readonly telemetryService: TelemetryService,
   ) {}
 
   /**
@@ -101,6 +107,17 @@ export class AlertsConsumer implements OnModuleInit {
         return;
       }
 
+      // Step 2.5: Lookup latest coordinates if latitude and longitude are both 0
+      let latitude = data.location.lat;
+      let longitude = data.location.lng;
+      if (latitude === 0 && longitude === 0) {
+        const latestTelemetry = await this.telemetryService.findLatestByDevice(data.deviceId);
+        if (latestTelemetry) {
+          latitude = latestTelemetry.lat;
+          longitude = latestTelemetry.lng;
+        }
+      }
+
       // Step 3: Create the alert record
       const snapshotMediaLog = data.snapshotId
         ? await this.alertsService.findSnapshotMediaLog(
@@ -112,8 +129,8 @@ export class AlertsConsumer implements OnModuleInit {
         deviceId: data.deviceId,
         alertType,
         message: data.message,
-        lat: data.location.lat,
-        lng: data.location.lng,
+        lat: latitude,
+        lng: longitude,
         snapshotId: data.snapshotId,
         snapshotMediaLogId: snapshotMediaLog?.id,
       });
