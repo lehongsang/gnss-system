@@ -83,6 +83,7 @@ const parseGeom = (
   return {
     parsedGeom,
     paths,
+    // GeoJSON Polygon lặp lại điểm đầu ở cuối để khép kín vòng, nên trừ 1 để ra số đỉnh thực
     vertexCount: paths.length > 0 ? paths.length - 1 : 0,
   };
 };
@@ -169,7 +170,7 @@ export class GeofencesService {
       );
     }
 
-    // Parse Geom here via raw if needed:
+    // Query raw để lấy geom dạng GeoJSON, vì entity không tự parse cột kiểu geometry của PostGIS
     const raw = await this.geofenceRepository.query<{ geom: string }[]>(
       `SELECT ST_AsGeoJSON(geom) as geom FROM geofences WHERE id = $1`,
       [id],
@@ -200,7 +201,7 @@ export class GeofencesService {
     });
     const saved = await this.geofenceRepository.save(geofence);
 
-    // Save GeoJSON geom directly via PostGIS
+    // Lưu geom bằng câu lệnh PostGIS trực tiếp thay vì qua ORM vì TypeORM không map được kiểu geometry
     await this.geofenceRepository.query(
       `
       UPDATE geofences SET geom = ST_GeomFromGeoJSON($1) WHERE id = $2
@@ -326,9 +327,9 @@ export class GeofencesService {
   }
 
   /**
-   * Evaluates all geofence rules assigned to a device and returns only newly
-   * triggered violations. The state table prevents repeated alerts while a
-   * device remains in the same violating state.
+   * Kiểm tra toàn bộ geofence đã gán cho thiết bị, chỉ trả về những vi phạm MỚI xảy ra.
+   * Bảng lưu trạng thái (geofenceDeviceState) giúp tránh bắn alert lặp lại khi
+   * thiết bị vẫn đứng yên trong cùng một trạng thái vi phạm từ lần kiểm tra trước.
    */
   async evaluateGeofenceTransitions(
     deviceId: string,
@@ -346,6 +347,7 @@ export class GeofencesService {
         g."createdAt",
         g."updatedAt",
         g.deleted_at,
+        -- Kiểm tra điểm (lng, lat) hiện tại có nằm trong đa giác geofence hay không
         ST_Within(ST_SetSRID(ST_MakePoint($2, $3), 4326), g.geom) AS is_inside
       FROM geofences g
       JOIN device_geofence dg ON dg.geofence_id = g.id
@@ -362,8 +364,11 @@ export class GeofencesService {
         ? GeofencePresenceState.INSIDE
         : GeofencePresenceState.OUTSIDE;
       const previousState = await this.getPreviousState(deviceId, row.id);
+      // Luôn cập nhật trạng thái mới nhất trước, dù có vi phạm hay không
       await this.saveCurrentState(deviceId, row.id, currentState);
 
+      // Vùng ALLOWED_ZONE: vi phạm khi thiết bị đi RA NGOÀI
+      // Vùng FORBIDDEN_ZONE: vi phạm khi thiết bị đi VÀO TRONG
       const isViolation =
         (row.type === GeofenceType.ALLOWED_ZONE &&
           currentState === GeofencePresenceState.OUTSIDE) ||
@@ -372,6 +377,7 @@ export class GeofencesService {
 
       if (!isViolation) continue;
 
+      // Chỉ coi là vi phạm mới khi trạng thái vừa đổi (tránh spam alert mỗi lần telemetry gửi về)
       const isNewViolation =
         previousState === null || previousState !== currentState;
       if (!isNewViolation) continue;

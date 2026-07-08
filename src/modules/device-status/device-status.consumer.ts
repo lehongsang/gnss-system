@@ -10,8 +10,8 @@ import { DeviceStatusPayloadDto } from './dtos/device-status-payload.dto';
 import { GnssKafkaEnvelope } from '@/commons/interfaces/app.interface';
 
 /**
- * Kafka consumer that listens to the GNSS_DEVICE_STATUS topic,
- * upserts device heartbeat data, and broadcasts status changes via WebSocket.
+ * Kafka consumer lắng nghe topic GNSS_DEVICE_STATUS, upsert dữ liệu heartbeat
+ * của thiết bị và broadcast thay đổi trạng thái qua WebSocket.
  */
 @Injectable()
 export class DeviceStatusConsumer implements OnModuleInit {
@@ -24,8 +24,8 @@ export class DeviceStatusConsumer implements OnModuleInit {
   ) {}
 
   /**
-   * Registers the Kafka consumer on application bootstrap.
-   * Subscribes to GNSS_DEVICE_STATUS with a dedicated consumer group.
+   * Đăng ký Kafka consumer khi ứng dụng khởi động.
+   * Subscribe topic GNSS_DEVICE_STATUS với consumer group riêng.
    */
   async onModuleInit(): Promise<void> {
     await this.kafkaService.consume(
@@ -39,11 +39,11 @@ export class DeviceStatusConsumer implements OnModuleInit {
   }
 
   /**
-   * Processes each incoming device status heartbeat:
-   * 1. Parses the JSON payload from Kafka
-   * 2. Validates the status against DeviceStatusEnum
-   * 3. Upserts the device status record via DeviceStatusService
-   * 4. Broadcasts the status update via WebSocket
+   * Xử lý từng heartbeat trạng thái thiết bị nhận được:
+   * 1. Parse JSON payload từ Kafka
+   * 2. Validate status theo DeviceStatusEnum
+   * 3. Upsert bản ghi trạng thái thiết bị qua DeviceStatusService
+   * 4. Broadcast cập nhật trạng thái qua WebSocket
    */
   private handleMessage: EachMessageHandler = async ({
     partition,
@@ -55,17 +55,17 @@ export class DeviceStatusConsumer implements OnModuleInit {
     const offset = message.offset;
 
     try {
-      // Step 1: Parse envelope and extract payload
+      // Bước 1: Parse envelope và lấy payload
       const rawObject = JSON.parse(rawValue) as GnssKafkaEnvelope<unknown>;
       if (!rawObject || !rawObject.payload) {
         throw new Error('Invalid GnssKafkaEnvelope structure: missing payload');
       }
       const data = await PayloadValidator.validate(DeviceStatusPayloadDto, rawObject.payload);
 
-      // Step 2: Extract status
+      // Bước 2: Lấy status
       const status = data.status;
 
-      // Step 3: Upsert the device status
+      // Bước 3: Upsert trạng thái thiết bị
       await this.deviceStatusService.upsert(data.deviceId, {
         status,
         batteryLevel: data.batteryLevel,
@@ -75,7 +75,7 @@ export class DeviceStatusConsumer implements OnModuleInit {
         signalStrength: data.signalStrength,
       });
 
-      // Step 4: Broadcast status update via WebSocket
+      // Bước 4: Broadcast cập nhật trạng thái qua WebSocket
       this.gnssGateway.broadcastDeviceStatus(data.deviceId, {
         status,
         batteryLevel: data.batteryLevel,
@@ -94,7 +94,7 @@ export class DeviceStatusConsumer implements OnModuleInit {
         error instanceof Error ? error.stack : error,
       );
 
-      // Apply Dead Letter Queue (DLQ)
+      // Đẩy message lỗi sang Dead Letter Queue (DLQ) để xử lý sau
       try {
         const dlqPayload = {
           originalPayload: rawValue,

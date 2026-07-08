@@ -34,8 +34,8 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   /**
-   * Initialises the MQTT client, subscribes to all GNSS device topics,
-   * and wires the message dispatcher.
+   * Khởi tạo MQTT client, subscribe vào tất cả topic của thiết bị GNSS
+   * và gắn hàm dispatch xử lý message.
    */
   onModuleInit(): void {
     this.client = mqtt.connect({
@@ -48,7 +48,7 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
     });
 
     this.client.on('connect', () => {
-      // Subscribe to all GNSS device topics using single-level wildcard
+      // Subscribe tất cả topic thiết bị GNSS bằng wildcard 1 cấp (+)
       this.client.subscribe('gnss/+/coordinates');
       this.client.subscribe('gnss/+/alert');
       this.client.subscribe('gnss/+/status');
@@ -70,18 +70,17 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Gracefully closes the MQTT connection on module teardown.
+   * Đóng kết nối MQTT một cách an toàn khi module bị destroy.
    */
   onModuleDestroy(): void {
     this.client?.end();
   }
 
   /**
-   * Routes incoming MQTT messages to the correct Kafka producer
-   * based on the topic's data-type segment.
+   * Điều hướng message MQTT tới đúng Kafka producer dựa vào phần data-type trong topic.
    *
-   * @param topic - Full MQTT topic string, e.g. "gnss/abc123/coordinates"
-   * @param payload - Raw binary payload from the device
+   * @param topic - Chuỗi topic MQTT đầy đủ, ví dụ "gnss/abc123/coordinates"
+   * @param payload - Payload dạng binary thô từ thiết bị
    */
   private async handleMessage(topic: string, payload: Buffer): Promise<void> {
     const segments = topic.split('/');
@@ -112,10 +111,10 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Publishes a JSON command to an MQTT topic.
+   * Publish một lệnh dạng JSON tới MQTT topic.
    *
-   * @param topic - Full MQTT topic
-   * @param value - JSON-serializable command payload
+   * @param topic - Topic MQTT đầy đủ
+   * @param value - Payload lệnh có thể serialize sang JSON
    */
   async publishJson(topic: string, value: Record<string, unknown>): Promise<void> {
     await new Promise<void>((resolve, reject) => {
@@ -135,10 +134,10 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Parses a GPS coordinate payload and produces it to the GNSS_COORDINATES Kafka topic.
+   * Parse payload tọa độ GPS và đẩy vào Kafka topic GNSS_COORDINATES.
    *
-   * @param deviceId - Device identifier extracted from the MQTT topic
-   * @param payload  - Raw JSON buffer from the device
+   * @param deviceId - ID thiết bị trích xuất từ topic MQTT
+   * @param payload  - Buffer JSON thô từ thiết bị
    */
   private async forwardCoordinates(
     deviceId: string,
@@ -176,10 +175,10 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Parses a device alert payload and produces it to the GNSS_ALERTS Kafka topic.
+   * Parse payload cảnh báo từ thiết bị và đẩy vào Kafka topic GNSS_ALERTS.
    *
-   * @param deviceId - Device identifier extracted from the MQTT topic
-   * @param payload  - Raw JSON buffer from the device
+   * @param deviceId - ID thiết bị trích xuất từ topic MQTT
+   * @param payload  - Buffer JSON thô từ thiết bị
    */
   private async forwardAlert(
     deviceId: string,
@@ -216,10 +215,10 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Parses a device status heartbeat payload and produces it to the GNSS_DEVICE_STATUS Kafka topic.
+   * Parse payload heartbeat trạng thái thiết bị và đẩy vào Kafka topic GNSS_DEVICE_STATUS.
    *
-   * @param deviceId - Device identifier extracted from the MQTT topic
-   * @param payload  - Raw JSON buffer from the device
+   * @param deviceId - ID thiết bị trích xuất từ topic MQTT
+   * @param payload  - Buffer JSON thô từ thiết bị
    */
   private async forwardStatus(
     deviceId: string,
@@ -256,21 +255,21 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Forwards media data to Kafka for async processing.
-   * Supports two payload formats from devices:
-   * 1. **Raw binary** (JPEG/MP4 bytes) → Base64-encodes for Kafka transport
-   * 2. **JSON with embedded Base64** → passes through the pre-encoded `data` field
+   * Chuyển tiếp dữ liệu media sang Kafka để xử lý bất đồng bộ.
+   * Hỗ trợ 2 định dạng payload từ thiết bị:
+   * 1. **Binary thô** (bytes JPEG/MP4) → encode Base64 để truyền qua Kafka
+   * 2. **JSON kèm Base64 sẵn** → dùng luôn field `data` đã được encode sẵn
    *
-   * @param deviceId  - Device identifier extracted from the MQTT topic
+   * @param deviceId  - ID thiết bị trích xuất từ topic MQTT
    * @param mediaType - 'image' | 'video'
-   * @param payload   - Raw buffer from the MQTT message
+   * @param payload   - Buffer thô từ message MQTT
    */
   private async forwardMedia(
     deviceId: string,
     mediaType: 'image' | 'video',
     payload: Buffer,
   ): Promise<void> {
-    // Step 1: Attempt to parse as JSON (device may send structured payload)
+    // Bước 1: Thử parse như JSON (thiết bị có thể gửi payload có cấu trúc)
     let data: string;
     let mimeType: string;
     let timestamp: string;
@@ -284,21 +283,21 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
         snapshotId?: string;
       };
 
-      // If the payload is JSON with a pre-encoded Base64 `data` field, use it directly
+      // Nếu payload là JSON có sẵn field `data` dạng Base64 thì dùng thẳng
       if (parsed.data) {
         data = parsed.data;
         mimeType = parsed.mimeType || (mediaType === 'image' ? 'image/jpeg' : 'video/mp4');
         timestamp = parsed.timestamp || new Date().toISOString();
         snapshotId = parsed.snapshotId;
       } else {
-        // JSON payload without `data` field — encode the entire buffer
+        // JSON hợp lệ nhưng không có field `data` — encode toàn bộ buffer
         data = payload.toString('base64');
         mimeType = mediaType === 'image' ? 'image/jpeg' : 'video/mp4';
         timestamp = new Date().toISOString();
         snapshotId = parsed.snapshotId;
       }
     } catch {
-      // Step 2: Not valid JSON — treat as raw binary (JPEG/MP4 bytes)
+      // Bước 2: Không phải JSON hợp lệ — coi như binary thô (bytes JPEG/MP4)
       data = payload.toString('base64');
       mimeType = mediaType === 'image' ? 'image/jpeg' : 'video/mp4';
       timestamp = new Date().toISOString();
@@ -341,6 +340,8 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
         ? (JSON.parse(existing) as LiveStreamSession)
         : null;
 
+      // Chỉ chấp nhận status khớp với requestId đang lưu trong Redis, tránh xử lý
+      // nhầm session cũ đã hết hạn hoặc request đã bị thay thế bởi request mới hơn
       if (!currentSession || currentSession.requestId !== data.requestId) {
         this.logger.warn(
           `Ignoring stream status for unknown request ${data.requestId} from device ${deviceId}`,
@@ -363,6 +364,8 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
         errorMessage: data.errorMessage,
       };
 
+      // TTL tính theo thời gian còn lại tới lúc session hết hạn, tối thiểu 60s để
+      // tránh key bị xóa ngay lập tức nếu expiresAt đã gần hết hạn
       const ttlSeconds = Math.max(
         Math.ceil(
           (new Date(updatedSession.expiresAt).getTime() - Date.now()) / 1000,

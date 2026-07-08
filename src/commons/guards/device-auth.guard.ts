@@ -16,9 +16,9 @@ interface AuthenticatedDeviceRequest extends Request {
 }
 
 /**
- * Guard to authenticate and authorize HTTP REST requests originating from IoT devices.
- * Expects HTTP Basic Authentication using the device's MQTT username and plain MQTT password.
- * Also strictly validates that a device cannot manipulate or view data on behalf of another device.
+ * Guard xác thực và phân quyền cho các request HTTP REST đến từ thiết bị IoT.
+ * Yêu cầu Basic Auth với username là username MQTT của thiết bị và password là mật khẩu MQTT thô.
+ * Đồng thời kiểm tra chặt để thiết bị không thể thao tác hoặc xem dữ liệu thay cho thiết bị khác.
  */
 @Injectable()
 export class DeviceAuthGuard implements CanActivate {
@@ -59,11 +59,11 @@ export class DeviceAuthGuard implements CanActivate {
       throw new UnauthorizedException('Invalid device credentials.');
     }
 
-    // Attach verified device to the request
+    // Gắn thiết bị đã xác thực vào request
     request.device = device;
 
-    // Strict ownership verification:
-    // If the body contains a deviceId, it must match the authenticated device's ID!
+    // Kiểm tra quyền sở hữu nghiêm ngặt:
+    // Nếu body có deviceId thì bắt buộc phải khớp với ID của thiết bị đã xác thực!
     const bodyDeviceId = request.body?.deviceId;
     if (bodyDeviceId && bodyDeviceId !== device.id) {
       throw new UnauthorizedException(

@@ -59,12 +59,14 @@ export class RoutePlansService {
       distanceMeters: route.distanceMeters,
       durationSeconds: route.durationSeconds,
       encodedPolyline: route.encodedPolyline,
+      // Ngưỡng lệch tuyến (mét) do người dùng đặt, nếu không truyền thì lấy mặc định từ env
       deviationThresholdMeters:
         dto.deviationThresholdMeters ??
         Number(process.env.ROUTE_DEVIATION_DEFAULT_THRESHOLD_METERS || 50),
     });
     const saved = await this.routePlanRepository.save(plan);
 
+    // TypeORM không map được kiểu geometry, nên phải update geom bằng raw query sau khi save
     await this.routePlanRepository.query(
       `UPDATE route_plans SET geom = ST_SetSRID(ST_GeomFromGeoJSON($1), 4326) WHERE id = $2`,
       [JSON.stringify(route.geojson), saved.id],
@@ -92,9 +94,11 @@ export class RoutePlansService {
     const qb = this.routePlanRepository
       .createQueryBuilder('routePlan')
       .leftJoinAndSelect('routePlan.device', 'device')
+      // Lấy thêm geom dạng GeoJSON qua raw select vì entity không tự parse được kiểu geometry
       .addSelect('ST_AsGeoJSON(routePlan.geom)', 'route_plan_geom');
 
     if (!isAdmin) {
+      // User thường chỉ xem được route plan của chính mình, admin thì xem hết
       qb.where('routePlan.ownerId = :requesterId', { requesterId });
     }
 
@@ -146,6 +150,7 @@ export class RoutePlansService {
       );
     }
 
+    // Query riêng để lấy geom dưới dạng GeoJSON, không lấy qua findOne được vì kiểu geometry
     const raw = await this.routePlanRepository.query<{ geom: string | null }[]>(
       `SELECT ST_AsGeoJSON(geom) as geom FROM route_plans WHERE id = $1`,
       [id],
@@ -170,6 +175,8 @@ export class RoutePlansService {
       throw new ConflictException('Only planned routes can be activated');
     }
 
+    // Quy tắc nghiệp vụ: mỗi thiết bị chỉ được có 1 tuyến ACTIVE tại 1 thời điểm,
+    // nên hủy hết các tuyến đang active khác của thiết bị trước khi kích hoạt tuyến mới
     await this.routePlanRepository.update(
       {
         deviceId: routePlan.deviceId,
@@ -226,6 +233,7 @@ export class RoutePlansService {
   }
 
   private enrichRoutePlan(entity: RoutePlan, raw: unknown[]): EnrichedRoutePlan {
+    // Ghép geom (lấy từ raw select) vào entity theo id, vì getRawAndEntities trả về 2 mảng riêng
     const rows = raw as { routePlan_id?: string; route_plan_geom?: string | null }[];
     const row = rows.find((item) => item.routePlan_id === entity.id);
     return {
@@ -243,6 +251,7 @@ export class RoutePlansService {
       }
       return parsed;
     } catch {
+      // Dữ liệu geom lỗi/không đúng định dạng thì trả về null thay vì throw lỗi
       return null;
     }
   }

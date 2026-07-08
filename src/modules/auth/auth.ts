@@ -35,6 +35,7 @@ export const getAuth = (
       'http://localhost:3000/api/auth',
     secret: configService.get<string>('BETTER_AUTH_SECRET'),
     logger: { disabled: false, level: 'debug' },
+    // Dùng Redis làm secondary storage cho session/rate-limit (chỉ bật khi redisService khả dụng)
     secondaryStorage: redisService
       ? {
           get: async (key: string) => redisService.get(key),
@@ -121,7 +122,9 @@ export const getAuth = (
     ],
     advanced: {
       useSecureCookies: configService.get<string>('NODE_ENV') === 'production',
+      // Tắt CSRF check ở môi trường non-production để tiện test/dev qua Postman, ngoài trình duyệt
       disableCSRFCheck: configService.get<string>('NODE_ENV') !== 'production',
+      // Production cần sameSite: 'none' + secure vì FE và BE khác domain (cross-site cookie)
       defaultCookieAttributes: configService.get<string>('NODE_ENV') === 'production'
         ? {
             sameSite: 'none',
@@ -140,6 +143,7 @@ export const getAuth = (
       modelName: 'authRateLimit',
     },
     hooks: {
+      // Hook chạy trước khi xử lý request, dùng để dọn user "rác" chưa verify email
       before: async (context) => {
         if (!context.request) return { context };
 
@@ -152,7 +156,7 @@ export const getAuth = (
           const email = body?.email;
 
           if (typeof email === 'string') {
-            // Check if user exists but is NOT verified
+            // Kiểm tra xem user đã tồn tại nhưng CHƯA xác thực email hay chưa
             const userResult = await database.query(
               'SELECT id, "emailVerified" FROM "user" WHERE LOWER(email) = $1',
               [email.toLowerCase()],
@@ -162,7 +166,7 @@ export const getAuth = (
               | undefined;
 
             if (user && !user.emailVerified) {
-              // Delete the unverified user to allow a fresh sign-up
+              // Xóa user chưa xác thực để cho phép đăng ký lại từ đầu
               await database.query('DELETE FROM "user" WHERE id = $1', [
                 user.id,
               ]);
@@ -200,10 +204,11 @@ export const getAuth = (
     },
     session: {
       cookieCache: { enabled: true, maxAge: 300 },
-      expiresIn: 2592000, // 30 days
+      expiresIn: 2592000, // 30 ngày
       updateAge: 86400,
       freshAge: 600,
       modelName: 'session',
+      storeSessionInDatabase: true,
     },
     user: {
       modelName: 'user',

@@ -16,21 +16,21 @@ export interface AuthenticatedSocket extends Socket {
 }
 
 /**
- * WebSocket Authentication Guard that validates the Bearer token
- * from Socket.IO handshake auth or headers against the database sessions.
+ * Guard xác thực WebSocket, kiểm tra Bearer token
+ * lấy từ handshake auth hoặc headers của Socket.IO với session trong database.
  */
 @Injectable()
 export class WsAuthGuard implements CanActivate {
   constructor(private readonly dataSource: DataSource) {}
 
   /**
-   * Guards the WebSocket handlers by checking for a valid session token.
-   * If the token is valid, it attaches the user data to the socket object.
+   * Bảo vệ các handler WebSocket bằng cách kiểm tra session token hợp lệ.
+   * Nếu token hợp lệ thì gắn thông tin user vào socket.
    */
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const client = context.switchToWs().getClient<AuthenticatedSocket>();
 
-    // Step-by-step logic: If already authenticated during connection, bypass
+    // Nếu đã xác thực sẵn từ lúc connect thì bỏ qua, không cần check lại
     if (client.data && client.data.user) {
       return true;
     }
@@ -41,7 +41,7 @@ export class WsAuthGuard implements CanActivate {
     }
 
     try {
-      // Step-by-step logic: Lookup active session in the database
+      // Tìm session còn hiệu lực trong database
       const session = await this.dataSource.getRepository(Session).findOne({
         where: { token },
         relations: ['user'],
@@ -51,7 +51,7 @@ export class WsAuthGuard implements CanActivate {
         throw new WsException('Unauthorized: Session expired or invalid');
       }
 
-      // Step-by-step logic: Attach user data to client socket
+      // Gắn thông tin user vào socket của client
       client.data = {
         ...client.data,
         user: {
@@ -68,7 +68,7 @@ export class WsAuthGuard implements CanActivate {
   }
 
   /**
-   * Helper method to extract token from handshake auth or headers.
+   * Hàm hỗ trợ lấy token từ handshake auth hoặc headers.
    */
   private extractToken(client: Socket): string | null {
     const authHeader: unknown =

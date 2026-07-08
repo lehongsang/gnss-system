@@ -8,7 +8,7 @@ export class RedisLockService {
 
   constructor(private redisService: RedisService) {}
   /**
-   * @deprecated Use withLock() instead. This method has a race condition.
+   * @deprecated Dùng withLock() thay thế. Method này có race condition.
    */
   public async lockWithTimeOut(key: string, ttl: number): Promise<boolean> {
     this.logger.warn(
@@ -18,14 +18,10 @@ export class RedisLockService {
   }
 
   /**
-   * Checks if a lock is absent for the given key.
+   * Kiểm tra xem key có đang bị khóa hay không.
    *
-   * This method queries the Redis database to determine whether a lock
-   * associated with the specified key is present. If the lock is absent,
-   * it returns true; otherwise, it returns false.
-   *
-   * @param key - The key to check for an associated lock.
-   * @returns A promise that resolves to true if there is no lock, otherwise false.
+   * @param key - Key cần kiểm tra.
+   * @returns true nếu chưa bị lock, false nếu đang bị lock.
    */
 
   public async isWithoutLock(key: string): Promise<boolean> {
@@ -35,14 +31,14 @@ export class RedisLockService {
     return !lockValue;
   }
   /**
-   * Acquires a lock with the given key and TTL using Redis SET NX PX.
+   * Giành lock cho key với TTL cho trước, dùng lệnh Redis SET NX PX.
    *
-   * This method uses the atomic SET command with NX (only set if not exists)
-   * and PX (milliseconds TTL) options to ensure thread-safe lock acquisition.
+   * Dùng SET nguyên tử với NX (chỉ set nếu chưa tồn tại) và PX (TTL theo ms)
+   * để đảm bảo giành lock không bị race condition giữa nhiều tiến trình.
    *
-   * @param key - The key to use for the lock.
-   * @param ttl - The TTL for the lock in milliseconds.
-   * @returns A promise that resolves to true if the lock was acquired, otherwise false.
+   * @param key - Key dùng làm lock.
+   * @param ttl - Thời gian sống của lock, tính bằng ms.
+   * @returns true nếu giành được lock, false nếu không.
    */
   public async acquireLock(key: string, ttl: number): Promise<boolean> {
     const lockValue = Date.now().toString();
@@ -57,31 +53,27 @@ export class RedisLockService {
   }
 
   /**
-   * Releases the lock associated with the given key.
+   * Giải phóng lock ứng với key đã cho.
    *
-   * This method deletes the lock entry from Redis, effectively releasing
-   * the lock. It ensures that the key is no longer marked as locked, allowing
-   * other operations to acquire the lock if necessary.
+   * Xóa entry lock khỏi Redis để các tiến trình khác có thể giành lock lại.
    *
-   * @param key - The key for which the lock is to be released.
-   * @returns A promise that resolves once the lock has been released.
+   * @param key - Key của lock cần giải phóng.
    */
   private async releaseLock(key: string): Promise<void> {
     await this.redisService.client.del(`${this.prefix}:${key}`);
   }
 
   /**
-   * Executes a function with distributed lock protection.
+   * Chạy một hàm dưới sự bảo vệ của distributed lock.
    *
-   * This method acquires a lock, executes the provided action, and ensures
-   * the lock is released even if the action throws an error. If the lock
-   * cannot be acquired, it returns null.
+   * Giành lock, thực thi action, và đảm bảo lock luôn được giải phóng dù
+   * action có throw lỗi hay không. Nếu không giành được lock thì trả về null
+   * (không throw, để caller tự quyết định xử lý tiếp thế nào).
    *
-   * @param key - The key to use for the lock.
-   * @param ttl - The TTL for the lock in milliseconds.
-   * @param action - The action to execute if the lock is acquired.
-   * @returns A promise that resolves to the result of the action if the lock is
-   *          acquired, otherwise null.
+   * @param key - Key dùng làm lock.
+   * @param ttl - Thời gian sống của lock, tính bằng ms.
+   * @param action - Hàm cần thực thi khi đã giành được lock.
+   * @returns Kết quả của action nếu giành được lock, ngược lại là null.
    */
   async withLock<T>(
     key: string,

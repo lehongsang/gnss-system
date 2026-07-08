@@ -232,6 +232,7 @@ services:
       - "${MEDIAMTX_RTSP_PORT:-8554}:8554"
       - "${MEDIAMTX_WEBRTC_PORT:-8889}:8889"
       - "${MEDIAMTX_API_PORT:-9997}:9997"
+      - "8189:8189/udp"
     environment:
       MTX_API: "yes"
       MTX_WEBRTC: "yes"

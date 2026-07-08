@@ -1,9 +1,9 @@
 import { randomBytes } from 'crypto';
 
 /**
- * Generates a cryptographically secure 64-character registration token.
- * Uses 32 bytes of randomness converted to a hex string.
- * @returns {string} A 64-character hex string.
+ * Sinh token đăng ký 64 ký tự bằng random mật mã an toàn.
+ * Dùng 32 byte ngẫu nhiên rồi chuyển sang chuỗi hex (mỗi byte = 2 ký tự hex).
+ * @returns {string} Chuỗi hex dài 64 ký tự.
  */
 export function generateSecureToken(): string {
   return randomBytes(32).toString('hex');

@@ -6,6 +6,8 @@ rtspAddress: :8554
 
 webrtc: yes
 webrtcAddress: :8889
+webrtcAdditionalHosts:
+  - gnss.sang2004.io.vn
 
 hls: no
 

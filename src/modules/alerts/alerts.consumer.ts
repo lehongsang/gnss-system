@@ -12,8 +12,8 @@ import { AlertType } from '@/commons/enums/app.enum';
 import { TelemetryService } from '@/modules/telemetry/telemetry.service';
 
 /**
- * Alert type titles for display in notifications and emails.
- * Maps each AlertType enum value to a human-readable Vietnamese title.
+ * Tiêu đề cảnh báo dùng để hiển thị trong notification và email.
+ * Map mỗi giá trị enum AlertType sang tiêu đề tiếng Việt dễ đọc.
  */
 const ALERT_TITLES: Record<AlertType, string> = {
   [AlertType.GEOFENCE_EXIT]: 'Thiết bị thoát khỏi vùng địa lý',
@@ -27,9 +27,9 @@ const ALERT_TITLES: Record<AlertType, string> = {
 };
 
 /**
- * Critical alert types that warrant an email notification.
- * Only these types will trigger an email to the device owner;
- * non-critical alerts will still be broadcast via WebSocket.
+ * Các loại cảnh báo nghiêm trọng cần gửi email thông báo.
+ * Chỉ những loại này mới trigger email cho chủ thiết bị;
+ * các cảnh báo không nghiêm trọng vẫn sẽ được broadcast qua WebSocket.
  */
 const CRITICAL_ALERT_TYPES: AlertType[] = [
   AlertType.GEOFENCE_EXIT,
@@ -40,9 +40,8 @@ const CRITICAL_ALERT_TYPES: AlertType[] = [
 ];
 
 /**
- * Kafka consumer that listens to the GNSS_ALERTS topic,
- * persists incoming device alerts, broadcasts them via WebSocket,
- * and sends email notifications for critical alert types.
+ * Kafka consumer lắng nghe topic GNSS_ALERTS, lưu các cảnh báo từ thiết bị,
+ * broadcast qua WebSocket, và gửi email thông báo cho các loại cảnh báo nghiêm trọng.
  */
 @Injectable()
 export class AlertsConsumer implements OnModuleInit {
@@ -59,8 +58,8 @@ export class AlertsConsumer implements OnModuleInit {
   ) {}
 
   /**
-   * Registers the Kafka consumer on application bootstrap.
-   * Subscribes to GNSS_ALERTS with a dedicated consumer group.
+   * Đăng ký Kafka consumer khi ứng dụng khởi động.
+   * Subscribe topic GNSS_ALERTS với consumer group riêng.
    */
   async onModuleInit(): Promise<void> {
     await this.kafkaService.consume(
@@ -74,12 +73,12 @@ export class AlertsConsumer implements OnModuleInit {
   }
 
   /**
-   * Processes each incoming alert message:
-   * 1. Parses the JSON payload from Kafka
-   * 2. Validates the alert type against the AlertType enum
-   * 3. Creates a new alert record via AlertsService
-   * 4. Looks up the device owner, broadcasts via WebSocket
-   * 5. Sends email notification for critical alert types
+   * Xử lý từng message cảnh báo nhận được:
+   * 1. Parse JSON payload từ Kafka
+   * 2. Validate alert type theo enum AlertType
+   * 3. Tạo bản ghi alert mới qua AlertsService
+   * 4. Tìm chủ sở hữu thiết bị, broadcast qua WebSocket
+   * 5. Gửi email thông báo cho các loại cảnh báo nghiêm trọng
    */
   private handleMessage: EachMessageHandler = async ({
     partition,
@@ -91,14 +90,14 @@ export class AlertsConsumer implements OnModuleInit {
     const offset = message.offset;
 
     try {
-      // Step 1: Parse the raw Kafka message body from envelope
+      // Bước 1: Parse body message từ envelope Kafka
       const rawObject = JSON.parse(rawValue) as GnssKafkaEnvelope<AlertKafkaPayload>;
       if (!rawObject || !rawObject.payload) {
         throw new Error('Invalid GnssKafkaEnvelope structure: missing payload');
       }
       const data = rawObject.payload;
 
-      // Step 2: Validate alert type against enum
+      // Bước 2: Validate alert type theo enum, type lạ thì bỏ qua luôn
       const alertType = data.type as AlertType;
       if (!Object.values(AlertType).includes(alertType)) {
         this.logger.warn(
@@ -107,7 +106,7 @@ export class AlertsConsumer implements OnModuleInit {
         return;
       }
 
-      // Step 2.5: Lookup latest coordinates if latitude and longitude are both 0
+      // Bước 2.5: Nếu thiết bị gửi lat/lng = 0 (chưa có GPS fix) thì lấy tọa độ telemetry gần nhất thay thế
       let latitude = data.location.lat;
       let longitude = data.location.lng;
       if (latitude === 0 && longitude === 0) {
@@ -118,7 +117,7 @@ export class AlertsConsumer implements OnModuleInit {
         }
       }
 
-      // Step 3: Create the alert record
+      // Bước 3: Tạo bản ghi alert
       const snapshotMediaLog = data.snapshotId
         ? await this.alertsService.findSnapshotMediaLog(
             data.deviceId,
@@ -135,16 +134,16 @@ export class AlertsConsumer implements OnModuleInit {
         snapshotMediaLogId: snapshotMediaLog?.id,
       });
 
-      // Step 4 & 5: Look up device owner → WebSocket broadcast + email notification
+      // Bước 4 & 5: Tìm chủ thiết bị → broadcast WebSocket + gửi email thông báo
       try {
         const device = await this.devicesService.findOne(
           data.deviceId,
           '',
-          true, // Use admin mode to bypass ownership check
+          true, // Dùng admin mode để bỏ qua kiểm tra quyền sở hữu
         );
 
         if (device.ownerId && device.owner) {
-          // Step 4a: WebSocket broadcast to user room
+          // Bước 4a: Broadcast WebSocket tới room của user
           this.gnssGateway.broadcastAlert(device.ownerId, {
             id: savedAlert.id,
             deviceId: data.deviceId,
@@ -156,7 +155,7 @@ export class AlertsConsumer implements OnModuleInit {
             snapshotMediaLogId: savedAlert.snapshotMediaLogId,
           });
 
-          // Step 5: Send email notification for critical alerts
+          // Bước 5: Gửi email thông báo cho cảnh báo nghiêm trọng
           // Chỉ gửi email nếu thiết bị báo cáo mức độ thực sự nguy hiểm (HIGH hoặc CRITICAL)
           const isHighSeverity = data.severity === 'CRITICAL' || data.severity === 'HIGH';
 
@@ -164,7 +163,7 @@ export class AlertsConsumer implements OnModuleInit {
             const title = ALERT_TITLES[alertType] ?? 'Cảnh báo từ thiết bị';
             const body = `Thiết bị "${device.name}": ${savedAlert.message}`;
 
-            // Fire-and-forget — email failure should not block processing
+            // Fire-and-forget — gửi email lỗi cũng không được chặn luồng xử lý chính
             this.mailService
               .sendAlertEmail(device.owner.email, title, body)
               .catch((err: unknown) => {
@@ -175,7 +174,7 @@ export class AlertsConsumer implements OnModuleInit {
           }
         }
       } catch {
-        // Device lookup failure should not block alert persistence
+        // Lỗi tìm thiết bị không được làm ảnh hưởng tới việc lưu alert đã tạo
         this.logger.warn(
           `Could not broadcast/notify alert — device ${data.deviceId} lookup failed`,
         );
@@ -190,7 +189,7 @@ export class AlertsConsumer implements OnModuleInit {
         error instanceof Error ? error.stack : error,
       );
 
-      // Apply Dead Letter Queue (DLQ)
+      // Đẩy message lỗi sang Dead Letter Queue (DLQ) để xử lý sau
       try {
         const dlqPayload = {
           originalPayload: rawValue,

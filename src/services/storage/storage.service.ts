@@ -51,11 +51,14 @@ export class StorageService {
       responseChecksumValidation: 'WHEN_REQUIRED' as const,
     };
 
+    // Client nội bộ dùng endpoint internal (vd: tên service trong docker network)
     this.s3Client = new S3Client({
       ...commonConfig,
       endpoint: (endpoint as string) || undefined,
     });
 
+    // Client ký presigned URL phải dùng endpoint mà client bên ngoài (browser/device)
+    // truy cập được, nếu không URL trả về sẽ trỏ vào địa chỉ nội bộ không gọi được
     this.signingClient = new S3Client({
       ...commonConfig,
       endpoint: (externalUrl as string) || undefined,
@@ -87,6 +90,8 @@ export class StorageService {
       throw new Error('Only image files are allowed');
     }
 
+    // Resize + convert sang webp để giảm dung lượng lưu trữ, giữ nguyên tỉ lệ
+    // và không phóng to ảnh nhỏ hơn kích thước giới hạn
     const processedBuffer = await sharp(file.buffer)
       .resize(2000, 2000, {
         fit: 'inside',
@@ -112,6 +117,7 @@ export class StorageService {
 
     const savedMedia = await this.mediaRepository.save(media);
 
+    // isSync=true: upload lên S3 ngay và chờ kết quả (dùng cho file nhỏ, cần trả về ngay)
     if (isSync) {
       try {
         await this.s3Client.send(
@@ -140,6 +146,8 @@ export class StorageService {
         throw error;
       }
     } else {
+      // isSync=false: trả về ngay presigned URL, việc upload thật sự sẽ được
+      // StorageConsumer xử lý bất đồng bộ qua Kafka (xem storage.consumer.ts)
       const presignedPutUrl = await getSignedUrl(
         this.signingClient,
         new PutObjectCommand({
@@ -195,6 +203,9 @@ export class StorageService {
       await this.mediaRepository.remove(media);
     } catch (error: unknown) {
       const dbError = error as { code?: string };
+      // 23503 = foreign key violation (Postgres): record media vẫn đang được bảng
+      // khác tham chiếu nên không xóa được, chấp nhận giữ lại metadata dù file
+      // trên S3 đã bị xóa ở trên
       if (dbError.code === '23503') {
         this.logger.warn(
           `Could not delete media record ${mediaId} because it is still referenced by another table. Metadata will remain but file content may have been removed.`,
@@ -265,16 +276,16 @@ export class StorageService {
   }
 
   /**
-   * Generates a presigned PUT URL that allows an external client (IoT device)
-   * to upload a file directly to S3 without going through the backend.
+   * Tạo presigned PUT URL để client bên ngoài (thiết bị IoT) upload file thẳng
+   * lên S3 mà không cần đi qua backend.
    *
-   * This is the "Out-of-band Upload" pattern: MQTT handles lightweight signaling,
-   * while the actual binary payload travels over HTTP directly to object storage.
+   * Đây là pattern "Out-of-band Upload": MQTT chỉ lo phần tín hiệu nhẹ (signaling),
+   * còn payload binary thật sự đi thẳng qua HTTP tới object storage.
    *
-   * @param key - The S3 object key (path) where the file will be stored
-   * @param mimeType - MIME type of the file to be uploaded (e.g. 'image/jpeg')
-   * @param expiresInSeconds - How long the URL remains valid (default 1 hour)
-   * @returns A time-limited URL with embedded AWS credentials for PUT upload
+   * @param key - S3 object key (đường dẫn) nơi file sẽ được lưu
+   * @param mimeType - MIME type của file cần upload (vd: 'image/jpeg')
+   * @param expiresInSeconds - Thời gian URL còn hiệu lực (mặc định 1 giờ)
+   * @returns URL có thời hạn, kèm credentials AWS để PUT upload
    */
   async getPresignedUploadUrl(
     key: string,
@@ -293,7 +304,7 @@ export class StorageService {
   }
 
   /**
-   * Uploads a raw buffer directly to S3 and returns the object key.
+   * Upload trực tiếp một buffer thô lên S3 và trả về object key.
    */
   async uploadRawFile(
     buffer: Buffer,
@@ -455,8 +466,8 @@ export class StorageService {
   }
 
   /**
-   * Retrieves metadata (size, contentType) of an object directly from S3.
-   * Helps verify if a tệp tin was successfully uploaded and check its size limits.
+   * Lấy metadata (size, contentType) của object trực tiếp từ S3.
+   * Dùng để xác nhận file đã upload thành công và kiểm tra giới hạn dung lượng.
    */
   async getObjectMetadata(
     key: string,

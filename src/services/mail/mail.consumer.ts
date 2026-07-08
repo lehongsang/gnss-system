@@ -16,7 +16,7 @@ export class MailConsumer implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    // Register Consumer with auto commit offset mechanism of KafkaJS
+    // Đăng ký consumer, dùng cơ chế auto commit offset mặc định của KafkaJS
     await this.kafkaService.consume(
       KafkaTopic.AUTH_MAIL,
       KafkaConsumerGroup.AUTH_MAIL,
@@ -41,7 +41,7 @@ export class MailConsumer implements OnModuleInit {
       const payload = JSON.parse(rawValue) as MailEventPayload;
       const { pattern, data, metadata } = payload;
 
-      // Log latency check
+      // Cảnh báo nếu message bị delay quá lâu (>10s) mới được xử lý tới
       if (metadata?.timestamp) {
         const latency = Date.now() - metadata.timestamp;
         if (latency > 10000) {
@@ -79,7 +79,8 @@ export class MailConsumer implements OnModuleInit {
         error instanceof Error ? error.stack : error,
       );
 
-      // Apply Dead Letter Queue (DLQ)
+      // Xử lý lỗi thất bại: đẩy message gốc kèm thông tin lỗi vào Dead Letter Queue (DLQ)
+      // để không làm mất message và có thể xử lý/retry lại sau
       const dlqPayload: MailDeadLetterPayload = {
         originalPayload: rawValue,
         error: error instanceof Error ? error.message : String(error),

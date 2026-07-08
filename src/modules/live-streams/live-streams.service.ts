@@ -23,7 +23,7 @@ export class LiveStreamsService {
   ) {}
 
   /**
-   * Starts a live stream session by sending an MQTT command to the device.
+   * Bắt đầu phiên live stream bằng cách gửi lệnh MQTT xuống thiết bị.
    */
   async start(
     deviceId: string,
@@ -48,6 +48,7 @@ export class LiveStreamsService {
       expiresAt: expiresAt.toISOString(),
     };
 
+    // TTL của session trong Redis = thời lượng stream, hết hạn thì session tự biến mất
     await this.redisService.setex(
       this.getSessionKey(deviceId),
       durationSeconds,
@@ -68,7 +69,7 @@ export class LiveStreamsService {
   }
 
   /**
-   * Stops an active live stream session by sending an MQTT command to the device.
+   * Dừng phiên live stream đang chạy bằng cách gửi lệnh MQTT xuống thiết bị.
    */
   async stop(
     deviceId: string,
@@ -84,6 +85,7 @@ export class LiveStreamsService {
       webrtcUrl: null,
     };
 
+    // Giữ lại session ở trạng thái STOPPED thêm 60s để client kịp query status trước khi mất
     await this.redisService.setex(
       this.getSessionKey(deviceId),
       60,
@@ -104,7 +106,7 @@ export class LiveStreamsService {
   }
 
   /**
-   * Returns the current live stream session for a device.
+   * Lấy thông tin phiên live stream hiện tại của thiết bị.
    */
   async getStatus(
     deviceId: string,

@@ -6,11 +6,11 @@ import { LoggerService } from '../logger/logger.service';
 import { getCorrelationId } from '../middlewares/correlation-id.middleware';
 
 /**
- * Global catch-all exception filter.
- * Catches any exception that is NOT handled by other specific filters
- * (e.g., TypeError, ReferenceError, or any unexpected error).
+ * Filter bắt lỗi toàn cục (catch-all).
+ * Bắt mọi exception KHÔNG được xử lý bởi các filter cụ thể khác
+ * (ví dụ: TypeError, ReferenceError, hoặc lỗi bất ngờ nào khác).
  *
- * MUST be registered FIRST in useGlobalFilters() so it runs LAST (NestJS checks in reverse order).
+ * PHẢI đăng ký ĐẦU TIÊN trong useGlobalFilters() để nó chạy CUỐI CÙNG (NestJS duyệt filter theo thứ tự ngược lại).
  */
 @Catch()
 @Injectable()
@@ -27,7 +27,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const message = isError ? exception.message : 'Unknown error';
     const stack = isError ? exception.stack : '';
 
-    // Always log unhandled exceptions to file — these are critical
+    // Luôn ghi log ra file với các exception chưa được xử lý — vì đây là lỗi nghiêm trọng
     this.logger.error(
       `[UnhandledException] ${message}`,
       undefined,
@@ -35,7 +35,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       stack || '',
     );
 
-    // Never leak stack trace or internal details to the client
+    // Không bao giờ để lộ stack trace hay thông tin nội bộ ra ngoài cho client
     response.status(500).json({
       statusCode: 500,
       message: 'Internal server error',

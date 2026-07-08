@@ -67,16 +67,18 @@ export class OpticalFlowResultConsumer implements OnModuleInit {
 
       log.processingStatus = payload.status;
       if (payload.status === 'completed' && payload.outputS3Key) {
+        // Xử lý xong thì lưu key file kết quả và xoá lỗi cũ (nếu có) đi
         log.processedS3Key = payload.outputS3Key;
         log.processingError = null;
       } else {
+        // Thất bại hoặc bị huỷ thì ghi lại lý do để hiển thị cho client
         log.processingError = payload.error || 'Unknown AI processing error';
       }
 
       await this.mediaLogRepository.save(log);
       this.logger.log(`Successfully updated AI processing status for MediaLog ${payload.jobId} to ${payload.status}`);
 
-      // Push notification via MQTT
+      // Bắn thông báo qua MQTT để client biết kết quả xử lý ngay lập tức
       const mqttTopic = `gnss/${log.deviceId}/media/result`;
       try {
         await this.mqttService.publishJson(mqttTopic, {
@@ -91,6 +93,7 @@ export class OpticalFlowResultConsumer implements OnModuleInit {
       }
 
     } catch (error) {
+      // Không đẩy sang DLQ ở đây vì lỗi thường do log không tồn tại, retry cũng vô ích
       const errMsg = error instanceof Error ? error.message : String(error);
       this.logger.error(
         `Failed to process optical flow result message at offset ${offset} on topic ${topic}: ${errMsg}`,
