@@ -21,7 +21,7 @@ export class CustomExceptionFilter implements ExceptionFilter {
     >;
     const correlationId = getCorrelationId(request);
 
-    // Log async (Fire-and-Forget) - not block request
+    // Log bất đồng bộ (Fire-and-Forget) - không chặn request
     this.logExceptionAsync(exception, correlationId);
 
     response.status(status).json({
@@ -32,17 +32,17 @@ export class CustomExceptionFilter implements ExceptionFilter {
   }
 
   /**
-   * Log exception async - Fire and Forget pattern
-   * Not await, not block request
+   * Log exception bất đồng bộ - theo pattern Fire and Forget
+   * Không await, không chặn request
    */
   private logExceptionAsync(
     exception: CustomException,
     correlationId: string,
   ): void {
-    // Use setImmediate to defer logging, not block current request
+    // Dùng setImmediate để đẩy việc log ra sau, không chặn request hiện tại
     setImmediate(() => {
       try {
-        // Context is already extracted in CustomException constructor
+        // Context đã được trích xuất sẵn trong constructor của CustomException
         const context = exception.context || 'Exception';
         this.logger.setContext(context);
         this.logger.error(

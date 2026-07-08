@@ -11,9 +11,9 @@ import { GnssGateway } from '@/gateways/gnss.gateway';
 import { LoggerService } from '@/commons/logger/logger.service';
 
 /**
- * Background service that periodically sweeps the device_status table.
- * If a device has not reported its status or sent telemetry in more than 5 minutes (300s),
- * it is automatically set to OFFLINE and the status change is broadcasted via WebSockets.
+ * Service chạy ngầm, định kỳ quét bảng device_status.
+ * Nếu thiết bị không báo trạng thái hoặc gửi telemetry trong hơn 5 phút (300s),
+ * tự động chuyển sang OFFLINE và broadcast thay đổi trạng thái qua WebSocket.
  */
 @Injectable()
 export class OfflineDetectorService
@@ -29,13 +29,13 @@ export class OfflineDetectorService
   ) {}
 
   onModuleInit() {
-    // Avoid running intervals during tests to prevent Jest open handles leak
+    // Không chạy interval khi test để tránh Jest bị leak open handle
     if (process.env.NODE_ENV === 'test') {
       return;
     }
 
     this.logger.log('Offline Detector heartbeat sweep initialized.');
-    // Run the sweep every 60 seconds
+    // Quét mỗi 60 giây
     this.timer = setInterval(() => {
       this.sweepHeartbeats().catch((err: unknown) => {
         this.logger.error(
@@ -54,9 +54,9 @@ export class OfflineDetectorService
   }
 
   /**
-   * Sweeps the device_status table for active 'online' devices that
-   * haven't received a status report or telemetry point in 5 minutes,
-   * setting them to 'offline' and broadcasting the status change via WS.
+   * Quét bảng device_status tìm các thiết bị đang 'online' nhưng
+   * không nhận được báo cáo trạng thái hoặc telemetry nào trong 5 phút,
+   * chuyển chúng sang 'offline' và broadcast thay đổi qua WebSocket.
    */
   async sweepHeartbeats(): Promise<void> {
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
@@ -80,7 +80,7 @@ export class OfflineDetectorService
       status.status = DeviceStatusEnum.OFFLINE;
       await this.deviceStatusRepository.save(status);
 
-      // Broadcast new status via WebSocket
+      // Broadcast trạng thái mới qua WebSocket
       this.gnssGateway.broadcastDeviceStatus(status.deviceId, {
         status: DeviceStatusEnum.OFFLINE,
         batteryLevel: status.batteryLevel,

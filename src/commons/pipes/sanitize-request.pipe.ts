@@ -5,15 +5,15 @@ import {
 } from '@nestjs/common';
 
 /**
- * Global Pipe to sanitize request data.
- * Automatically converts empty strings ('') and the string 'null' to undefined.
- * Since Pipes run AFTER Interceptors (like FileInterceptor), this effectively
- * cleans up the body populated by Multer before validation occurs.
+ * Pipe toàn cục để làm sạch dữ liệu request.
+ * Tự động chuyển chuỗi rỗng ('') và chuỗi 'null' thành undefined.
+ * Vì Pipe chạy SAU Interceptor (như FileInterceptor), nên nó dọn sạch
+ * body do Multer tạo ra trước khi validate diễn ra.
  */
 @Injectable()
 export class SanitizeRequestPipe implements PipeTransform {
   transform(value: unknown, metadata: ArgumentMetadata): unknown {
-    // Only sanitize body payloads
+    // Chỉ sanitize dữ liệu body
     if (metadata.type === 'body' && value && typeof value === 'object') {
       return this.sanitize(value);
     }
@@ -26,7 +26,7 @@ export class SanitizeRequestPipe implements PipeTransform {
     }
 
     if (obj !== null && typeof obj === 'object' && !(obj instanceof Date)) {
-      // Safely check for 'buffer' property to skip Multer File objects
+      // Kiểm tra property 'buffer' để bỏ qua object File của Multer, tránh sanitize nhầm
       if ('buffer' in obj) {
         return obj;
       }

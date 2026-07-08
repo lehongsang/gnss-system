@@ -109,7 +109,7 @@ export class DevicesService {
   ): Promise<DeviceProvisioningResponseDto> {
     const device = this.deviceRepository.create({
       ...dto,
-      ownerId: dto.ownerId || ownerId, // User gets their ID, Admin can pass ownerId
+      ownerId: dto.ownerId || ownerId, // User thường thì lấy ID của chính mình, Admin có thể chỉ định ownerId khác
     });
     const savedDevice = await this.deviceRepository.save(device);
     const mqttPassword = this.generateMqttPassword();
@@ -150,7 +150,7 @@ export class DevicesService {
   }
 
   /**
-   * Reissues MQTT credentials and invalidates the previous device password.
+   * Cấp lại thông tin đăng nhập MQTT mới, vô hiệu hóa mật khẩu cũ của thiết bị.
    */
   async regenerateMqttCredentials(
     id: string,
@@ -181,9 +181,9 @@ export class DevicesService {
   }
 
   /**
-   * Deletes a device by ID.
-   * Uses findOne() internally to ensure the device exists and the requester
-   * has ownership (non-admin) before proceeding with deletion.
+   * Xóa thiết bị theo ID.
+   * Gọi findOne() bên trong để đảm bảo thiết bị tồn tại và requester
+   * có quyền sở hữu (nếu không phải admin) trước khi xóa.
    */
   async remove(
     id: string,
@@ -196,9 +196,9 @@ export class DevicesService {
   }
 
   /**
-   * Finds a device by ID without ownership check.
-   * Used by device-facing APIs (e.g. presigned URL upload) where
-   * there is no authenticated user session.
+   * Tìm thiết bị theo ID mà không kiểm tra quyền sở hữu.
+   * Dùng cho các API gọi trực tiếp từ thiết bị (vd: presigned URL upload)
+   * vì lúc này không có session user đăng nhập.
    *
    * @param id - The device UUID
    * @returns The device entity
@@ -213,7 +213,7 @@ export class DevicesService {
   }
 
   /**
-   * Finds a device including its MQTT password hash for broker authentication.
+   * Tìm thiết bị kèm theo MQTT password hash để broker xác thực.
    */
   async findByMqttUsernameWithSecret(
     mqttUsername: string,
@@ -226,7 +226,7 @@ export class DevicesService {
   }
 
   /**
-   * Verifies device MQTT credentials using the stored password hash.
+   * Xác thực thông tin đăng nhập MQTT của thiết bị bằng password hash đã lưu.
    */
   async verifyMqttCredentials(
     mqttUsername: string,
@@ -245,21 +245,21 @@ export class DevicesService {
   }
 
   /**
-   * Builds the canonical MQTT username for a device.
+   * Tạo MQTT username chuẩn cho thiết bị.
    */
   private buildMqttUsername(deviceId: string): string {
     return `device:${deviceId}`;
   }
 
   /**
-   * Generates a high-entropy MQTT password that is shown only once.
+   * Sinh mật khẩu MQTT có độ ngẫu nhiên cao, chỉ hiển thị cho user đúng một lần.
    */
   private generateMqttPassword(): string {
     return randomBytes(32).toString('base64url');
   }
 
   /**
-   * Builds the provisioning payload expected by frontend and devices.
+   * Tạo payload provisioning theo đúng format mà frontend và thiết bị mong đợi.
    */
   private buildMqttCredentials(
     deviceId: string,

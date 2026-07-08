@@ -25,7 +25,7 @@ import { LoggerService } from './commons/logger/logger.service';
 import { correlationIdMiddleware } from './commons/middlewares/correlation-id.middleware';
 
 async function bootstrap() {
-  // suppressBetterAuthLogs();
+  // suppressBetterAuthLogs(); // tắt log ồn ào của better-auth (đang comment lại, chưa dùng)
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bodyParser: false,
@@ -43,24 +43,24 @@ async function bootstrap() {
     .map((origin: string) => origin.trim())
     .filter(Boolean);
 
-  // Configure CORS
+  // Cấu hình CORS: production chỉ cho phép các origin trong whitelist, môi trường khác thì mở hết
   app.enableCors({
     origin: isProduction && corsOrigins.length > 0 ? corsOrigins : true,
     credentials: true,
   });
 
-  // Register correlation ID middleware - Must be before all other middleware for proper tracking
+  // Đăng ký middleware correlation ID - phải đặt trước tất cả middleware khác để trace log xuyên suốt request
   app.use(correlationIdMiddleware);
   app.use('/api/mqtt/auth', json({ limit: '10kb' }));
 
-  // Configure global guards
+  // Lấy reflector để dùng cho interceptor bên dưới
   const reflector = app.get<Reflector>(Reflector);
 
-  // Configure cookie parser
+  // Parse cookie
   app.use(cookieParser());
-  // Compress responses
+  // Nén response trả về
   app.use(compression());
-  // Configure global validation
+  // Pipe validate toàn cục: sanitize dữ liệu trước, sau đó validate DTO
   app.useGlobalPipes(
     new SanitizeRequestPipe(),
     new ValidationPipe({
@@ -68,9 +68,9 @@ async function bootstrap() {
       transform: true,
     }),
   );
-  // Configure global interceptors
+  // Interceptor toàn cục để serialize entity theo @Exclude/@Expose
   app.useGlobalInterceptors(new ClassSerializerInterceptor(reflector));
-  // Configure global prefix
+  // Prefix chung cho API, riêng route auth và root thì không áp prefix
   app.setGlobalPrefix(API_GLOBAL_PREFIX, {
     exclude: [`/${API_GLOBAL_PREFIX}/auth/*path`, '/'],
   });

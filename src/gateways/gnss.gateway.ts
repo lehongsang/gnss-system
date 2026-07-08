@@ -17,9 +17,9 @@ import { DataSource } from 'typeorm';
 import { Session } from '@/modules/auth/entities/session.entity';
 
 /**
- * WebSocket gateway for GNSS realtime data streaming.
- * Secured via WsAuthGuard to ensure only authenticated users
- * can subscribe to device rooms and user-specific alert streams.
+ * Gateway WebSocket phục vụ stream dữ liệu GNSS realtime.
+ * Được bảo vệ bởi WsAuthGuard để đảm bảo chỉ user đã xác thực
+ * mới có thể subscribe vào room của thiết bị và stream cảnh báo riêng.
  */
 @WebSocketGateway({
   cors: {
@@ -41,12 +41,12 @@ export class GnssGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {}
 
   /**
-   * Handles a client subscribing to a specific device's telemetry stream.
-   * Leverages WsAuthGuard for authentication, then strictly validates that
-   * the authenticated user is the owner or an admin of the requested device.
+   * Xử lý khi client subscribe vào stream telemetry của một thiết bị cụ thể.
+   * Dựa vào WsAuthGuard để xác thực, sau đó kiểm tra chặt chẽ rằng
+   * user đã xác thực phải là chủ sở hữu hoặc admin của thiết bị được yêu cầu.
    *
-   * @param client - The connected Socket.IO client
-   * @param deviceId - UUID of the device to subscribe to
+   * @param client - Socket.IO client đang kết nối
+   * @param deviceId - UUID của thiết bị cần subscribe
    */
   @UseGuards(WsAuthGuard)
   @SubscribeMessage('subscribe:device')
@@ -60,7 +60,7 @@ export class GnssGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const isAdmin = user.role === 'admin';
 
     try {
-      // Step-by-step logic: Ownership check using DevicesService.findOne
+      // Kiểm tra quyền sở hữu thông qua DevicesService.findOne
       await this.devicesService.findOne(deviceId, user.id, isAdmin);
 
       await client.join(`device:${deviceId}`);
@@ -74,10 +74,10 @@ export class GnssGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   /**
-   * Handles a client unsubscribing from a device's telemetry stream.
+   * Xử lý khi client hủy subscribe khỏi stream telemetry của thiết bị.
    *
-   * @param client - The connected Socket.IO client
-   * @param deviceId - UUID of the device to unsubscribe from
+   * @param client - Socket.IO client đang kết nối
+   * @param deviceId - UUID của thiết bị cần hủy subscribe
    */
   @SubscribeMessage('unsubscribe:device')
   handleUnsubscribeDevice(
@@ -91,11 +91,11 @@ export class GnssGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   /**
-   * Handles a client joining their personal user room for alert notifications.
-   * Validates that users can only join their own room, while admins can join any.
+   * Xử lý khi client join vào room cá nhân để nhận thông báo cảnh báo.
+   * Đảm bảo user thường chỉ join được room của chính mình, còn admin thì join room nào cũng được.
    *
-   * @param client - The connected Socket.IO client
-   * @param userId - UUID of the authenticated user
+   * @param client - Socket.IO client đang kết nối
+   * @param userId - UUID của user đã xác thực
    */
   @UseGuards(WsAuthGuard)
   @SubscribeMessage('join:user')
@@ -107,7 +107,7 @@ export class GnssGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const user = authClient.data.user;
     if (!user) throw new WsException('Unauthorized');
 
-    // Step-by-step logic: Ensure non-admin users can only join their own room
+    // Đảm bảo user không phải admin chỉ được join room của chính mình
     if (user.role !== 'admin' && user.id !== userId) {
       throw new WsException('Unauthorized: Access denied');
     }
@@ -116,14 +116,14 @@ export class GnssGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.logger.log(`User ${user.id} joined user room:${userId}`);
   }
 
-  // Broadcast methods called by consumers
+  // Các hàm broadcast được gọi từ consumer
 
   /**
-   * Broadcasts a telemetry update to all clients watching a specific device.
-   * Called by TelemetryConsumer after successfully saving a GPS point.
+   * Phát telemetry mới nhất tới tất cả client đang theo dõi một thiết bị.
+   * Được TelemetryConsumer gọi sau khi lưu thành công một điểm GPS.
    *
-   * @param deviceId - UUID of the device
-   * @param data - Telemetry payload with coordinates, speed, and timestamp
+   * @param deviceId - UUID của thiết bị
+   * @param data - Dữ liệu telemetry gồm tọa độ, tốc độ và timestamp
    */
   broadcastTelemetry(
     deviceId: string,
@@ -142,11 +142,11 @@ export class GnssGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   /**
-   * Broadcasts a new alert to the device owner's personal room.
-   * Called by AlertsConsumer after successfully creating an alert record.
+   * Phát cảnh báo mới tới room cá nhân của chủ sở hữu thiết bị.
+   * Được AlertsConsumer gọi sau khi tạo thành công bản ghi alert.
    *
-   * @param deviceOwnerId - UUID of the user who owns the alerting device
-   * @param alert - Alert payload with type, message, and location
+   * @param deviceOwnerId - UUID của user sở hữu thiết bị đang cảnh báo
+   * @param alert - Dữ liệu cảnh báo gồm loại, nội dung và vị trí
    */
   broadcastAlert(
     deviceOwnerId: string,
@@ -165,11 +165,11 @@ export class GnssGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   /**
-   * Broadcasts a device status change to all clients watching that device.
-   * Called by DeviceStatusConsumer after upserting a status record.
+   * Phát thay đổi trạng thái thiết bị tới tất cả client đang theo dõi thiết bị đó.
+   * Được DeviceStatusConsumer gọi sau khi upsert bản ghi trạng thái.
    *
-   * @param deviceId - UUID of the device
-   * @param data - Status payload
+   * @param deviceId - UUID của thiết bị
+   * @param data - Dữ liệu trạng thái
    */
   broadcastDeviceStatus(
     deviceId: string,
@@ -188,11 +188,11 @@ export class GnssGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
   }
 
-  // Lifecycle hooks
+  // Các hook vòng đời kết nối
 
   /**
-   * Handles new connection by logging and performing an early authentication check
-   * if a token is supplied during handshake.
+   * Xử lý khi có kết nối mới: log lại và thử xác thực sớm
+   * nếu client gửi kèm token trong lúc handshake.
    */
   async handleConnection(client: Socket): Promise<void> {
     this.logger.log(`WS Client connected: ${client.id}`);
@@ -228,14 +228,14 @@ export class GnssGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   /**
-   * Logs when a client disconnects from the WebSocket gateway.
+   * Log lại khi client ngắt kết nối khỏi gateway WebSocket.
    */
   handleDisconnect(client: Socket): void {
     this.logger.log(`WS Client disconnected: ${client.id}`);
   }
 
   /**
-   * Helper method to extract token from handshake options or headers.
+   * Hàm hỗ trợ lấy token từ handshake auth hoặc headers.
    */
   private extractToken(client: Socket): string | null {
     const authHeader: unknown =

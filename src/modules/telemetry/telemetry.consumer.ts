@@ -17,15 +17,14 @@ import { PayloadValidator } from '@/utils/payload-validator.util';
 import { TelemetryPayloadDto } from './dtos/telemetry-payload.dto';
 
 /**
- * Cooldown period (in seconds) between SPEEDING alerts for the same device.
- * Prevents spam when a device continuously exceeds the speed limit.
+ * Thời gian cooldown (giây) giữa 2 lần cảnh báo SPEEDING cho cùng 1 thiết bị.
+ * Tránh spam cảnh báo khi thiết bị chạy quá tốc độ liên tục.
  */
 const SPEEDING_COOLDOWN_SECONDS = 60;
 
 /**
- * Kafka consumer that listens to the GNSS_COORDINATES topic,
- * persists incoming GPS data points, broadcasts them via WebSocket,
- * and performs server-side speed violation detection.
+ * Kafka consumer lắng nghe topic GNSS_COORDINATES, lưu các điểm GPS nhận được,
+ * broadcast qua WebSocket, và kiểm tra vi phạm tốc độ ngay tại server.
  */
 @Injectable()
 export class TelemetryConsumer implements OnModuleInit {
@@ -43,7 +42,7 @@ export class TelemetryConsumer implements OnModuleInit {
   ) {}
 
   /**
-   * Registers the Kafka batch consumer on application bootstrap.
+   * Đăng ký Kafka batch consumer khi app khởi động.
    */
   async onModuleInit(): Promise<void> {
     await this.kafkaService.consumeBatch(
@@ -57,10 +56,10 @@ export class TelemetryConsumer implements OnModuleInit {
   }
 
   /**
-   * Processes a batch of incoming coordinate messages:
-   * 1. Parses and validates all items in the batch.
-   * 2. Persists all valid points to TimescaleDB in a single multi-row INSERT.
-   * 3. Broadcasts updates via WebSocket and triggers async violations checks.
+   * Xử lý 1 batch message tọa độ:
+   * 1. Parse và validate từng item trong batch.
+   * 2. Lưu toàn bộ điểm hợp lệ vào TimescaleDB bằng 1 câu INSERT nhiều dòng.
+   * 3. Broadcast qua WebSocket và chạy các check vi phạm ở chế độ bất đồng bộ.
    */
   private handleBatch: EachBatchHandler = async ({ batch }) => {
     const validPoints: { deviceId: string; payload: CoordinatePayload }[] = [];
@@ -88,7 +87,7 @@ export class TelemetryConsumer implements OnModuleInit {
 
         validPoints.push({ deviceId: data.deviceId, payload });
 
-        // Immediate Broadcast (Real-time feeling)
+        // Broadcast ngay lập tức để có cảm giác real-time, không chờ lưu DB xong
         this.gnssGateway.broadcastTelemetry(data.deviceId, {
           ...payload,
         });
@@ -100,11 +99,11 @@ export class TelemetryConsumer implements OnModuleInit {
     if (validPoints.length === 0) return;
 
     try {
-      // Step 2: Bulk Persist to TimescaleDB
+      // Bước 2: lưu hàng loạt vào TimescaleDB
       await this.telemetryService.saveBatch(validPoints);
 
-      // Step 3: Run violation checks for each valid point
-      // Optimization: we run these in parallel but they don't block the next batch fetch
+      // Bước 3: chạy check vi phạm cho từng điểm hợp lệ
+      // Tối ưu: chạy song song và không await -> không chặn việc lấy batch tiếp theo
       for (const { deviceId, payload } of validPoints) {
         this.runAsyncChecks(deviceId, payload).catch((e) =>
           this.logger.error(`Async checks failed for ${deviceId}`, e),
@@ -120,7 +119,7 @@ export class TelemetryConsumer implements OnModuleInit {
   };
 
   /**
-   * Offloads analysis logic to prevent blocking the main ingestion flow.
+   * Tách riêng logic phân tích ra khỏi luồng chính để không làm chậm việc nhận dữ liệu.
    */
   private async runAsyncChecks(
     deviceId: string,
@@ -135,22 +134,22 @@ export class TelemetryConsumer implements OnModuleInit {
 
 
   /**
-   * Checks if the device's speed exceeds its configured speed limit.
-   * If the limit is exceeded and no cooldown is active, creates a SPEEDING alert
-   * and sets a Redis TTL key to prevent alert spam (max 1 alert per cooldown period).
+   * Kiểm tra tốc độ thiết bị có vượt giới hạn cấu hình không.
+   * Nếu vượt và không đang trong cooldown thì tạo alert SPEEDING và set TTL Redis
+   * để tránh spam (tối đa 1 alert mỗi chu kỳ cooldown).
    *
-   * @param deviceId - UUID of the device
-   * @param payload - The coordinate payload containing the current speed
+   * @param deviceId - UUID của thiết bị
+   * @param payload - Payload tọa độ chứa tốc độ hiện tại
    */
   private async checkSpeedViolation(
     deviceId: string,
     payload: CoordinatePayload,
   ): Promise<void> {
-    // Skip if speed is zero or negative (device is stationary or data invalid)
+    // Bỏ qua nếu tốc độ bằng 0 hoặc âm (thiết bị đứng yên hoặc dữ liệu lỗi)
     if (payload.speed <= 0) return;
 
     try {
-      // Optimization: Cache device speed limit in Redis for 5 minutes
+      // Tối ưu: cache giới hạn tốc độ của thiết bị trong Redis 5 phút để đỡ query DB
       const cacheKey = `device:limit:${deviceId}`;
       let speedLimitKmh: number | null = null;
 
@@ -165,12 +164,12 @@ export class TelemetryConsumer implements OnModuleInit {
 
       if (!speedLimitKmh || payload.speed <= speedLimitKmh) return;
 
-      // Check Redis cooldown to prevent alert spam
+      // Check cooldown trong Redis để tránh spam cảnh báo
       const cooldownKey = `speeding:${deviceId}`;
       const alreadyAlerted = await this.redisService.get(cooldownKey);
       if (alreadyAlerted) return;
 
-      // Create the SPEEDING alert
+      // Tạo alert SPEEDING
       await this.alertsService.create({
         deviceId,
         alertType: AlertType.SPEEDING,
@@ -179,7 +178,7 @@ export class TelemetryConsumer implements OnModuleInit {
         lng: payload.lng,
       });
 
-      // Set cooldown to prevent sending another alert within the cooldown period
+      // Set cooldown để không gửi thêm alert khác trong khoảng thời gian này
       await this.redisService.setex(
         cooldownKey,
         SPEEDING_COOLDOWN_SECONDS,
@@ -191,7 +190,7 @@ export class TelemetryConsumer implements OnModuleInit {
       );
 
     } catch (error) {
-      // Speed check failure should not block telemetry processing
+      // Lỗi check tốc độ không được làm gián đoạn luồng xử lý telemetry
       this.logger.warn(
         `Speed check failed for device ${deviceId}: ${error instanceof Error ? error.message : error}`,
       );
@@ -199,18 +198,18 @@ export class TelemetryConsumer implements OnModuleInit {
   }
 
   /**
-   * Checks if the device has exited any of its assigned geofences.
-   * Leverages PostGIS server-side spatial querying via GeofencesService.
+   * Kiểm tra thiết bị có ra/vào geofence được gán không.
+   * Tận dụng truy vấn không gian PostGIS phía server qua GeofencesService.
    *
-   * @param deviceId - UUID of the device
-   * @param payload - The coordinate payload
+   * @param deviceId - UUID của thiết bị
+   * @param payload - Payload tọa độ
    */
   private async checkGeofenceViolation(
     deviceId: string,
     payload: CoordinatePayload,
   ): Promise<void> {
     try {
-      // Evaluate assigned geofence rules and return only newly triggered violations.
+      // Đánh giá các rule geofence đã gán, chỉ trả về vi phạm mới phát sinh (transition)
       const violations = await this.geofencesService.evaluateGeofenceTransitions(
         deviceId,
         payload.lat,
@@ -219,13 +218,13 @@ export class TelemetryConsumer implements OnModuleInit {
 
       if (!violations || violations.length === 0) return;
 
-      // For each violated geofence, check cooldown and trigger alert
+      // Với mỗi geofence bị vi phạm, check cooldown rồi mới bắn alert
       for (const violation of violations) {
         const { geofence, alertType } = violation;
         const cooldownKey = `${alertType}:${deviceId}:${geofence.id}`;
         const alreadyAlerted = await this.redisService.get(cooldownKey);
 
-        if (alreadyAlerted) continue; // Alert was already sent recently
+        if (alreadyAlerted) continue; // Đã gửi alert gần đây rồi, bỏ qua
 
         const message =
           alertType === AlertType.GEOFENCE_EXIT
@@ -240,7 +239,7 @@ export class TelemetryConsumer implements OnModuleInit {
           lng: payload.lng,
         });
 
-        // Set cooldown (e.g., 5 minutes = 300s) to prevent spamming emails
+        // Set cooldown (5 phút = 300s) để tránh spam email cảnh báo
         const GEOFENCE_COOLDOWN_SECONDS = 300;
         await this.redisService.setex(
           cooldownKey,
@@ -253,7 +252,7 @@ export class TelemetryConsumer implements OnModuleInit {
         );
       }
     } catch (error) {
-      // Geofence check failure should not block telemetry processing
+      // Lỗi check geofence không được làm gián đoạn luồng xử lý telemetry
       this.logger.warn(
         `Geofence check failed for device ${deviceId}: ${error instanceof Error ? error.message : error}`,
       );
@@ -261,7 +260,7 @@ export class TelemetryConsumer implements OnModuleInit {
   }
 
   /**
-   * Checks whether the device has deviated from its active planned route.
+   * Kiểm tra thiết bị có đi lệch khỏi tuyến đường đang active không.
    */
   private async checkRouteDeviation(
     deviceId: string,

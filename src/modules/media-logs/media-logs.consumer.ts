@@ -12,7 +12,7 @@ import { GnssKafkaEnvelope } from '@/commons/interfaces/app.interface';
 interface MediaUploadMessage {
   deviceId: string;
   mediaType: 'image' | 'video';
-  data: string; // Base64 string
+  data: string; // Chuỗi Base64
   mimeType: string;
   timestamp: string;
   snapshotId?: string;
@@ -51,26 +51,26 @@ export class MediaLogsConsumer implements OnModuleInit {
     const offset = message.offset;
 
     try {
-      // Parse envelope and extract payload
+      // Parse envelope Kafka và lấy ra payload thực sự
       const rawObject = JSON.parse(rawValue) as GnssKafkaEnvelope<MediaUploadMessage>;
       if (!rawObject || !rawObject.payload) {
         throw new Error('Invalid GnssKafkaEnvelope structure: missing payload');
       }
       const payload = rawObject.payload;
-      
+
       this.logger.log(
         `[P:${partition}][Offset:${offset}] Processing media upload for device: ${payload.deviceId}`,
       );
 
-      // Convert Base64 string back to Buffer
+      // Decode ngược Base64 về Buffer nhị phân
       const buffer = Buffer.from(payload.data, 'base64');
-      
-      // Determine file extension
+
+      // Xác định đuôi file theo loại media
       const extension = payload.mediaType === 'image' ? 'jpg' : 'mp4';
       const filename = `${Date.now()}-${payload.deviceId}.${extension}`;
       const folder = `media-logs/${payload.deviceId}`;
 
-      // Upload to S3
+      // Upload file lên S3
       const s3Key = await this.storageService.uploadRawFile(
         buffer,
         payload.mimeType,
@@ -78,20 +78,20 @@ export class MediaLogsConsumer implements OnModuleInit {
         filename,
       );
 
-      // Map mediaType
+      // Map mediaType từ payload sang enum của entity
       const mappedMediaType =
         payload.mediaType === 'image'
           ? MediaType.IMAGE_FRAME
           : MediaType.VIDEO_CHUNK;
 
-      // Save to database
+      // Lưu bản ghi vào database
       const savedLog = await this.mediaLogsService.create({
         deviceId: payload.deviceId,
         mediaType: mappedMediaType,
         startTime: new Date(payload.timestamp),
-        endTime: new Date(payload.timestamp), // For image frames, end = start. For video, could be different but we use the timestamp as is.
+        endTime: new Date(payload.timestamp), // Với ảnh thì end = start; video lẽ ra có thể khác nhưng tạm dùng chung timestamp
         s3Key: s3Key,
-        fileUrl: '', // Using presigned URLs now, so fileUrl can be empty
+        fileUrl: '', // Giờ dùng presigned URL nên fileUrl để trống cũng được
         snapshotId: payload.snapshotId ?? null,
       });
 
@@ -117,7 +117,7 @@ export class MediaLogsConsumer implements OnModuleInit {
         error instanceof Error ? error.stack : undefined,
       );
 
-      // Apply Dead Letter Queue (DLQ)
+      // Xử lý lỗi thất bại: đẩy sang Dead Letter Queue (DLQ) để không mất message
       try {
         const dlqPayload = {
           originalPayload: rawValue,

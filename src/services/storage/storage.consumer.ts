@@ -20,7 +20,7 @@ export class StorageConsumer implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    // Register Consumer with auto commit offset mechanism of KafkaJS
+    // Đăng ký consumer, dùng cơ chế auto commit offset mặc định của KafkaJS
     await this.kafkaService.consume(
       KafkaTopic.STORAGE_UPLOAD,
       KafkaConsumerGroup.STORAGE_UPLOAD,
@@ -49,7 +49,7 @@ export class StorageConsumer implements OnModuleInit {
         `[P:${partition}][Offset:${offset}] Processing storage upload for mediaId: ${mediaId}`,
       );
 
-      // Fetch file from presigned URL
+      // Tải nội dung file về từ presigned URL mà client đã upload lên trước đó
       const response = await fetch(fileUrl);
       if (!response.ok) {
         throw new Error(
@@ -59,7 +59,7 @@ export class StorageConsumer implements OnModuleInit {
 
       const arrayBuffer = await response.arrayBuffer();
 
-      // Process upload to S3
+      // Xử lý upload thật sự lên S3
       await this.storageService.processUpload(
         mediaId,
         Buffer.from(arrayBuffer),

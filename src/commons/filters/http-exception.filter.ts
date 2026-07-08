@@ -17,7 +17,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const exceptionResponse = exception.getResponse();
     const correlationId = getCorrelationId(request);
 
-    // Extract message — handle both string and array (ValidationPipe returns array)
+    // Lấy message — xử lý cả trường hợp string và array (ValidationPipe trả về array)
     let message: string | string[] = exception.message;
     if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
       const errorObject = exceptionResponse as Record<string, unknown>;
@@ -28,6 +28,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       }
     }
 
+    // Multer trả lỗi "Unexpected field" khá khó hiểu, viết lại message cho rõ ràng hơn với user
     if (typeof message === 'string' && message.startsWith('Unexpected field')) {
       if (message.includes('gallery')) {
         message = 'Pet gallery supports up to 4 images (field: gallery).';
@@ -36,7 +37,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       }
     }
 
-    // Log 500 errors to file (important), others to console only
+    // Lỗi 500 thì ghi log ra file (quan trọng), lỗi khác chỉ log ra console
     if (status >= 500) {
       this.logger.error(
         exception.message,
@@ -48,7 +49,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       this.logger.errorConsoleOnly(exception.message, undefined, correlationId);
     }
 
-    // Standardized response format — consistent with CustomExceptionFilter
+    // Định dạng response chuẩn hóa — đồng nhất với CustomExceptionFilter
     response.status(status).json({
       statusCode: status,
       message,
@@ -57,8 +58,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
   }
 
   /**
-   * Maps HTTP status to a generic error code
-   * for consistency with CustomExceptionFilter response format.
+   * Map HTTP status sang mã lỗi chung
+   * để đồng nhất định dạng response với CustomExceptionFilter.
    */
   private mapStatusToCode(status: number): string {
     const statusCodeMap: Record<number, string> = {

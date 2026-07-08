@@ -62,6 +62,7 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
         await consumer.stop();
         await consumer.disconnect();
       } catch (err) {
+        // Không throw ở đây để lỗi của 1 consumer không chặn việc đóng các consumer còn lại
         this.logger.error('Error during consumer shutdown', err);
       }
     }
@@ -69,13 +70,14 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Send messages to a Kafka topic
-   * Supports both raw payloads and KafkaJS Message objects (key, headers, etc.)
+   * Gửi message tới một Kafka topic
+   * Hỗ trợ cả payload thô lẫn object Message chuẩn của KafkaJS (key, headers, ...)
    */
   async produce(
     topic: string,
     messages: (Record<string, unknown> | Message)[],
   ) {
+    // Chặn produce khi chưa connect xong, tránh lỗi khó hiểu từ kafkajs
     if (!this.isProducerReady || !this.producer) {
       throw new Error('Kafka producer is not ready');
     }
@@ -85,6 +87,7 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
         acks: -1,
         messages: messages.map((m) => {
           if (m && typeof m === 'object' && 'value' in m) {
+            // Đã là Message object của KafkaJS, chỉ cần đảm bảo value là string/Buffer
             const message = m as Message;
             return {
               ...message,
@@ -95,6 +98,7 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
                   : JSON.stringify(message.value),
             };
           }
+          // Payload thô (object thường hoặc string) thì serialize thành string trước khi gửi
           return {
             value: typeof m === 'string' ? m : JSON.stringify(m),
           };
@@ -107,11 +111,12 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Create a consumer and subscribe to a topic
+   * Tạo consumer mới và subscribe vào một topic
    */
   async consume(topic: string, groupId: string, onMessage: EachMessageHandler) {
     const consumer = this.kafka.consumer({
       groupId,
+      // Retry khi mất kết nối tạm thời với broker, tối đa 10 lần
       retry: { initialRetryTime: 100, retries: 10 },
       sessionTimeout: 15000,
       heartbeatInterval: 3000,
@@ -127,7 +132,7 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Create a batch consumer and subscribe to a topic
+   * Tạo consumer xử lý theo batch và subscribe vào một topic
    */
   async consumeBatch(
     topic: string,

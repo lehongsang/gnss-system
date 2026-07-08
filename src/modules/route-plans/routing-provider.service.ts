@@ -29,6 +29,7 @@ interface MapboxDirectionsResponse {
   code?: string;
 }
 
+// Map mode di chuyển của app sang profile tương ứng bên Mapbox Directions API
 const MODE_TO_PROFILE: Record<string, string> = {
   driving: 'mapbox/driving',
   walking: 'mapbox/walking',
@@ -40,6 +41,7 @@ export class RoutingProviderService {
   constructor(private readonly configService: ConfigService) {}
 
   async getRoute(dto: PreviewRouteDto): Promise<RouteResult> {
+    // Hiện chỉ hỗ trợ Mapbox, để sẵn config ROUTING_PROVIDER phòng khi thêm provider khác
     const provider = this.configService.get<string>(
       'ROUTING_PROVIDER',
       'mapbox',
@@ -73,9 +75,11 @@ export class RoutingProviderService {
     try {
       response = await fetch(url);
     } catch {
+      // Lỗi mạng/timeout khi gọi Mapbox -> coi như dịch vụ routing tạm thời không dùng được
       throw new ServiceUnavailableException('Routing provider unavailable');
     }
 
+    // Body có thể không phải JSON hợp lệ, tránh throw parse lỗi thì fallback về object rỗng
     const body = (await response.json().catch(() => ({}))) as MapboxDirectionsResponse;
     if (!response.ok) {
       if (response.status === 404 || body.code === 'NoRoute') {
@@ -86,6 +90,7 @@ export class RoutingProviderService {
       );
     }
 
+    // Mapbox trả routes rỗng nhưng vẫn 200 OK trong vài trường hợp -> vẫn phải tự kiểm tra
     const route = body.routes?.[0];
     if (!route?.geometry?.coordinates?.length) {
       throw new NotFoundException('Route not found');
@@ -107,6 +112,7 @@ export class RoutingProviderService {
       return MODE_TO_PROFILE[mode];
     }
 
+    // Không truyền mode hoặc mode lạ -> dùng profile mặc định từ config
     return this.configService.get<string>(
       'MAPBOX_DIRECTIONS_PROFILE',
       'mapbox/driving',

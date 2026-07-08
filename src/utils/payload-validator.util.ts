@@ -2,18 +2,18 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 
 /**
- * Utility helper to strictly validate incoming JSON payloads (e.g. from MQTT or Kafka)
- * using class-validator DTOs.
- * Prevents corrupted or malicious payloads from entering database operations.
+ * Helper validate chặt các payload JSON đầu vào (vd: từ MQTT hoặc Kafka)
+ * bằng DTO class-validator.
+ * Chặn payload lỗi hoặc cố tình gửi sai định dạng trước khi chạm tới database.
  */
 export class PayloadValidator {
   /**
-   * Statically validates a raw parsed object against a class DTO.
-   * Returns the validated DTO instance if valid, or throws a detailed error.
+   * Validate 1 object đã parse với DTO tương ứng.
+   * Trả về instance DTO đã validate nếu hợp lệ, ngược lại throw lỗi chi tiết.
    *
-   * @param dtoClass - The class constructor of the target DTO (e.g., CreateDeviceDto)
-   * @param rawObject - The raw parsed JSON tệp tin
-   * @returns A promise resolving to the fully instantiated DTO
+   * @param dtoClass - Constructor của DTO đích (vd: CreateDeviceDto)
+   * @param rawObject - Object JSON thô đã parse, chưa qua kiểm tra
+   * @returns Promise trả về DTO instance đã được khởi tạo đầy đủ
    */
   static async validate<T extends object>(
     dtoClass: new () => T,
@@ -23,6 +23,7 @@ export class PayloadValidator {
       throw new Error('Payload is not a valid JSON object');
     }
 
+    // whitelist: true tự động bỏ field không khai báo trong DTO, tránh payload thừa/rác
     const instance = plainToInstance(dtoClass, rawObject);
     const errors = await validate(instance, {
       whitelist: true,

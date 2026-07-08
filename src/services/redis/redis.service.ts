@@ -4,29 +4,29 @@ import { ConfigService } from '@nestjs/config';
 import { Redis } from 'ioredis';
 
 /**
- * RedisService provides a wrapper around ioredis
- * to simplify publishing, subscribing, and key management.
+ * RedisService bọc lại ioredis để đơn giản hóa việc publish, subscribe
+ * và quản lý key.
  */
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
   /**
-   * Redis client instance for general commands.
+   * Client Redis dùng cho các lệnh chung.
    */
   public readonly client: Redis;
 
   /**
-   * Dedicated Redis client instance for caching operations (get/set/setex).
-   * This is separate from pub/sub to avoid "subscriber mode" conflicts.
+   * Client Redis riêng cho việc cache (get/set/setex).
+   * Tách riêng khỏi pub/sub để tránh xung đột "subscriber mode".
    */
   public readonly cacheClient: Redis;
 
   /**
-   * Redis client instance for publishing messages.
+   * Client Redis dùng để publish message.
    */
   public readonly publisher: Redis;
 
   /**
-   * Redis client instance for subscribing to messages.
+   * Client Redis dùng để subscribe message.
    */
   public readonly subscriber: Redis;
 
@@ -38,6 +38,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       }
 
       this.client = new Redis(redisUrl);
+      // duplicate() tạo connection mới dùng chung config, cần tách riêng vì
+      // subscriber mode và pub/sub sẽ chiếm dụng connection không cho chạy lệnh khác
       this.cacheClient = this.client.duplicate();
       this.publisher = this.client.duplicate();
       this.subscriber = this.client.duplicate();
@@ -49,11 +51,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Wait for Redis connections to be ready before proceeding
+   * Chờ tất cả kết nối Redis sẵn sàng trước khi cho module tiếp tục khởi động
    */
   async onModuleInit(): Promise<void> {
     try {
-      // Wait for all Redis clients to be ready
+      // Đợi song song cả 4 client đều ready
       await Promise.all([
         this.waitForClientReady(this.client),
         this.waitForClientReady(this.cacheClient),
@@ -68,7 +70,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Wait for a Redis client to be ready
+   * Chờ một client Redis chuyển sang trạng thái ready
    */
   private async waitForClientReady(client: Redis): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -80,7 +82,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       client.once('ready', () => resolve());
       client.once('error', reject);
 
-      // Timeout after 30 seconds
+      // Timeout sau 30 giây để tránh treo app mãi nếu Redis không kết nối được
       setTimeout(() => {
         client.removeListener('ready', resolve);
         client.removeListener('error', reject);
@@ -90,7 +92,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Cleanup Redis connections when module is destroyed
+   * Dọn dẹp kết nối Redis khi module bị destroy
    */
   async onModuleDestroy(): Promise<void> {
     try {
@@ -101,8 +103,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         this.subscriber?.disconnect(),
       ]);
     } catch (error: unknown) {
-      // Log error but don't throw to avoid blocking shutdown
-      // Using process.env.NODE_ENV check to allow console.error in non-production environments
+      // Chỉ log lỗi chứ không throw, tránh chặn quá trình shutdown của app
+      // Chỉ console.error ở môi trường non-production
       if (this.configService.get('NODE_ENV') !== 'production') {
         console.error('Error during Redis cleanup:', error);
       }
@@ -110,11 +112,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Waits for a single event from a Redis channel.
+   * Chờ một message duy nhất từ một Redis channel.
    *
-   * @param channel - Redis channel name
-   * @param timeout - Maximum wait time in ms (default: 5000ms = 5 seconds)
-   * @returns The received message or null if timed out
+   * @param channel - Tên channel Redis
+   * @param timeout - Thời gian chờ tối đa (ms), mặc định 5000ms
+   * @returns Message nhận được, hoặc null nếu hết thời gian chờ
    */
   async waitForEvent(channel: string, timeout = 5000): Promise<string | null> {
     return new Promise<string | null>((resolve) => {
@@ -129,6 +131,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       }, timeout);
 
       const onMessage = (receivedChannel: string, message: string): void => {
+        // subscriber dùng chung 1 listener cho mọi channel nên phải tự lọc đúng channel cần đợi
         if (receivedChannel === channel && !isResolved) {
           isResolved = true;
           clearTimeout(timer);
@@ -137,12 +140,12 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         }
       };
 
-      // Subscribe to channel first
+      // Subscribe channel trước khi gắn listener
       this.subscriber.subscribe(channel).catch((error: unknown) => {
         if (!isResolved) {
           isResolved = true;
           clearTimeout(timer);
-          // Using process.env.NODE_ENV check to allow console.error in non-production environments
+          // Chỉ console.error ở môi trường non-production
           if (this.configService.get('NODE_ENV') !== 'production') {
             console.error(`Failed to subscribe to channel ${channel}:`, error);
           }
@@ -155,13 +158,13 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Removes all keys matching the given prefix pattern.
+   * Xóa toàn bộ key khớp với pattern prefix cho trước.
    *
-   * The script uses the KEYS command to retrieve all keys matching the pattern,
-   * deletes them, and returns the number of deleted keys.
+   * Dùng script Lua chạy SCAN (thay vì KEYS) theo từng batch 1000 key để tránh
+   * block Redis khi dataset lớn, sau đó DEL từng key và đếm tổng số đã xóa.
    *
-   * @param prefix - The key pattern to match (e.g., "orders:*")
-   * @returns A promise that resolves with the number of deleted keys
+   * @param prefix - Pattern để match key (vd: "orders:*")
+   * @returns Số lượng key đã bị xóa
    */
   public async removeKeyWithPrefix(prefix: string): Promise<number> {
     try {
@@ -198,11 +201,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Publishes a message to a Redis channel
+   * Publish một message tới Redis channel
    *
-   * @param channel - Redis channel name
-   * @param message - Message to publish
-   * @returns Number of subscribers that received the message
+   * @param channel - Tên channel Redis
+   * @param message - Nội dung message cần gửi
+   * @returns Số lượng subscriber đã nhận được message
    */
   public async publish(channel: string, message: string): Promise<number> {
     try {
@@ -217,10 +220,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Subscribe to a Redis channel
+   * Subscribe vào một Redis channel
    *
-   * @param channel - Redis channel name
-   * @param callback - Function to handle received messages
+   * @param channel - Tên channel Redis
+   * @param callback - Hàm xử lý message nhận được
    */
   public async subscribe(
     channel: string,
@@ -239,9 +242,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Unsubscribe from a Redis channel
+   * Hủy subscribe khỏi một Redis channel
    *
-   * @param channel - Redis channel name
+   * @param channel - Tên channel Redis
    */
   public async unsubscribe(channel: string): Promise<void> {
     try {
@@ -256,10 +259,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Atomic increment operation
+   * Tăng giá trị key lên 1 (atomic)
    *
-   * @param key - Redis key name
-   * @returns The value after increment
+   * @param key - Tên key Redis
+   * @returns Giá trị sau khi tăng
    */
   public async incr(key: string): Promise<number> {
     try {
@@ -272,10 +275,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Atomic decrement operation
+   * Giảm giá trị key đi 1 (atomic)
    *
-   * @param key - Redis key name
-   * @returns The value after decrement
+   * @param key - Tên key Redis
+   * @returns Giá trị sau khi giảm
    */
   public async decr(key: string): Promise<number> {
     try {
@@ -288,10 +291,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Get value from Redis
+   * Lấy giá trị từ Redis
    *
-   * @param key - Redis key name
-   * @returns The value or null if key doesn't exist
+   * @param key - Tên key Redis
+   * @returns Giá trị, hoặc null nếu key không tồn tại
    */
   public async get(key: string): Promise<string | null> {
     try {
@@ -305,11 +308,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Set value in Redis
+   * Set giá trị vào Redis
    *
-   * @param key - Redis key name
-   * @param value - Value to set
-   * @returns OK if successful
+   * @param key - Tên key Redis
+   * @param value - Giá trị cần set
+   * @returns OK nếu thành công
    */
   public async set(
     key: string,
@@ -325,12 +328,12 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Set value in Redis with expiry (seconds)
+   * Set giá trị vào Redis kèm thời gian hết hạn (giây)
    *
-   * @param key - Redis key name
-   * @param seconds - Expiry time in seconds
-   * @param value - Value to set
-   * @returns OK if successful
+   * @param key - Tên key Redis
+   * @param seconds - Thời gian hết hạn tính bằng giây
+   * @param value - Giá trị cần set
+   * @returns OK nếu thành công
    */
   public async setex(
     key: string,
@@ -347,10 +350,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Delete key from Redis
+   * Xóa key khỏi Redis
    *
-   * @param key - Redis key name
-   * @returns Number of keys deleted (0 or 1)
+   * @param key - Tên key Redis
+   * @returns Số key đã xóa (0 hoặc 1)
    */
   public async del(key: string): Promise<number> {
     try {
@@ -363,11 +366,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Set expiration for a key in seconds
+   * Đặt thời gian hết hạn cho key, tính bằng giây
    *
-   * @param key - Redis key name
-   * @param seconds - Expiration time in seconds
-   * @returns 1 if the timeout was set, 0 if key does not exist
+   * @param key - Tên key Redis
+   * @param seconds - Thời gian hết hạn tính bằng giây
+   * @returns 1 nếu đặt thành công, 0 nếu key không tồn tại
    */
   public async expire(key: string, seconds: number): Promise<number> {
     try {
@@ -380,11 +383,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Set expiration for a key in milliseconds
+   * Đặt thời gian hết hạn cho key, tính bằng mili giây
    *
-   * @param key - Redis key name
-   * @param milliseconds - Expiration time in milliseconds
-   * @returns 1 if the timeout was set, 0 if key does not exist
+   * @param key - Tên key Redis
+   * @param milliseconds - Thời gian hết hạn tính bằng mili giây
+   * @returns 1 nếu đặt thành công, 0 nếu key không tồn tại
    */
   public async pexpire(key: string, milliseconds: number): Promise<number> {
     try {

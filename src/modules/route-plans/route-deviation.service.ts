@@ -8,6 +8,7 @@ import { AlertType, RoutePlanStatus } from '@/commons/enums/app.enum';
 import type { CoordinatePayload } from '@/commons/interfaces/app.interface';
 import { LoggerService } from '@/commons/logger/logger.service';
 
+// Kết quả trả về từ câu query lấy tuyến đường đang active gần nhất kèm khoảng cách lệch
 interface ActiveRouteDistanceRow {
   id: string;
   name: string | null;
@@ -31,6 +32,8 @@ export class RouteDeviationService {
     payload: CoordinatePayload,
   ): Promise<void> {
     try {
+      // Lấy tuyến đang ACTIVE gần nhất của thiết bị, tính luôn khoảng cách thực tế (mét)
+      // từ vị trí hiện tại tới tuyến bằng PostGIS (ST_Distance trên kiểu geography cho ra mét chính xác)
       const rows = await this.routePlanRepository.query<ActiveRouteDistanceRow[]>(
         `
         SELECT
@@ -58,6 +61,7 @@ export class RouteDeviationService {
       const thresholdMeters = Number(activeRoute.deviation_threshold_meters);
       if (distanceMeters <= thresholdMeters) return;
 
+      // Chống spam cảnh báo: mỗi tuyến/thiết bị chỉ bắn 1 alert lệch tuyến trong thời gian cooldown
       const cooldownKey = `trajectory_deviation:${deviceId}:${activeRoute.id}`;
       const alreadyAlerted = await this.redisService.get(cooldownKey);
       if (alreadyAlerted) return;
@@ -79,6 +83,7 @@ export class RouteDeviationService {
         `TRAJECTORY_DEVIATION for device ${deviceId}: ${distanceMeters.toFixed(0)}m > ${thresholdMeters}m`,
       );
     } catch (error) {
+      // Lỗi khi check lệch tuyến không được làm gián đoạn luồng xử lý telemetry chính
       this.logger.warn(
         `Route deviation check failed for device ${deviceId}: ${error instanceof Error ? error.message : String(error)}`,
       );

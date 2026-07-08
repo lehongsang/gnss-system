@@ -12,22 +12,22 @@ import { RedisService } from '../../services/redis/redis.service';
 import { RATE_LIMIT_METADATA } from '../decorators/rate-limit.decorator';
 
 /**
- * Rate limiting guard to prevent abuse of the API
- * Limit request per user or IP address
+ * Guard giới hạn tần suất request để chống lạm dụng API
+ * Giới hạn theo từng user hoặc theo địa chỉ IP
  *
- * The usage is as follows:
+ * Cách dùng:
  *
- * 1. Default rate limiting (10 requests per 60 seconds):
+ * 1. Giới hạn mặc định (10 request mỗi 60 giây):
  * @RateLimit()
  *
- * 2. Custom rate limiting:
+ * 2. Tùy chỉnh giới hạn:
  * @RateLimit({ limit: 50, ttl: 30 })
  */
 @Injectable()
 export class CustomRateLimitGuard implements CanActivate {
   private readonly logger = new Logger(CustomRateLimitGuard.name);
   private readonly defaultLimit = 100;
-  private readonly defaultTtl = 60; // seconds
+  private readonly defaultTtl = 60; // đơn vị giây
 
   constructor(
     private readonly reflector: Reflector,
@@ -47,17 +47,17 @@ export class CustomRateLimitGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<Request>();
     const identifier = this.getIdentifier(request);
 
-    // Use custom key if provided, otherwise fallback to global
+    // Dùng key tùy chỉnh nếu có, không thì dùng key mặc định theo class + handler
     const throttleKey =
       decoratorOptions?.key ||
       `${context.getClass().name}.${context.getHandler().name}`;
     const key = `throttle:${throttleKey}:${identifier}`;
 
     try {
-      const current = await this.redisService.incr(key); // atomic increment
+      const current = await this.redisService.incr(key); // tăng đếm nguyên tử (atomic)
 
       if (current === 1) {
-        // Set TTL for the first request
+        // Chỉ set TTL ở request đầu tiên để bắt đầu tính cửa sổ thời gian
         await this.redisService.expire(key, ttl);
       }
 
@@ -73,7 +73,7 @@ export class CustomRateLimitGuard implements CanActivate {
         );
       }
 
-      // Add info to request object for later use
+      // Gắn thông tin rate limit vào request để dùng sau này (ví dụ trả về header)
       request.rateLimit = {
         limit,
         current,
@@ -86,7 +86,7 @@ export class CustomRateLimitGuard implements CanActivate {
       if (error instanceof HttpException) {
         throw error;
       }
-      // If Redis has an error, allow the request to pass through
+      // Nếu Redis lỗi thì cho request đi qua luôn, tránh block toàn bộ hệ thống vì Redis down
       this.logger.warn(
         `Rate limit check failed for ${identifier}: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
@@ -95,16 +95,16 @@ export class CustomRateLimitGuard implements CanActivate {
   }
 
   /**
-   * Get identifier for rate limiting
-   * Priority: userId (if authenticated) > IP address
+   * Lấy định danh để giới hạn tần suất
+   * Ưu tiên: userId (nếu đã đăng nhập) > địa chỉ IP
    */
   private getIdentifier(request: Request): string {
-    // If user is authenticated, limit per user
+    // Nếu đã xác thực thì giới hạn theo user
     if (request.user?.id) {
       return `user:${request.user.id}`;
     }
 
-    // If not, limit per IP
+    // Nếu chưa thì giới hạn theo IP
     const ip =
       request.ip ||
       (request.headers['x-forwarded-for'] as string)?.split(',')[0] ||

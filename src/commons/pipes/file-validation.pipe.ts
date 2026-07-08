@@ -18,7 +18,7 @@ export interface FileFieldValidationOptions {
 }
 
 /**
- * Factory to create highly configurable ParseFilePipe instances.
+ * Factory tạo ra ParseFilePipe có thể cấu hình linh hoạt.
  */
 export function createFileValidationPipe(options?: {
   maxSize?: number;
@@ -50,11 +50,11 @@ export function createFileValidationPipe(options?: {
 }
 
 /**
- * Universal File Validation Pipe.
- * Automatically handles:
- * - Single File (@UploadedFile())
- * - Multiple Files (@UploadedFiles() from FilesInterceptor)
- * - Multiple Fields (@UploadedFiles() from FileFieldsInterceptor)
+ * Pipe validate file dùng chung cho mọi trường hợp.
+ * Tự động xử lý:
+ * - 1 file đơn (@UploadedFile())
+ * - Nhiều file (@UploadedFiles() từ FilesInterceptor)
+ * - Nhiều field khác nhau (@UploadedFiles() từ FileFieldsInterceptor)
  */
 @Injectable()
 export class FileFieldsValidationPipe implements PipeTransform {
@@ -76,7 +76,7 @@ export class FileFieldsValidationPipe implements PipeTransform {
       return value;
     }
 
-    // Case 1: Multiple named fields (Object of arrays from FileFieldsInterceptor)
+    // Trường hợp 1: nhiều field có tên riêng (object chứa mảng, từ FileFieldsInterceptor)
     if (
       typeof value === 'object' &&
       !(value as Record<string, unknown>).buffer &&
@@ -103,7 +103,7 @@ export class FileFieldsValidationPipe implements PipeTransform {
       return value;
     }
 
-    // Case 2: Single file or Array of files
+    // Trường hợp 2: file đơn hoặc mảng file
     const pipe = createFileValidationPipe(
       this.options as Record<string, unknown>,
     );

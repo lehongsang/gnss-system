@@ -23,9 +23,9 @@ export class AlertsService {
   ) {}
 
   /**
-   * Retrieves a paginated list of alerts.
-   * Non-admin users are restricted to alerts from devices they own,
-   * using an INNER JOIN instead of a separate device query (avoids N+1 anti-pattern).
+   * Lấy danh sách alert có phân trang.
+   * User thường chỉ xem được alert của thiết bị mình sở hữu,
+   * dùng INNER JOIN thay vì query device riêng để tránh N+1.
    */
   async findAll(
     query: AlertQueryDto,
@@ -43,7 +43,7 @@ export class AlertsService {
     } = query;
     const qb = this.alertRepository.createQueryBuilder('alert');
 
-    // For non-admin, join the device so dashboard clients can display device names.
+    // User thường: join device để dashboard hiển thị được tên thiết bị.
     if (!isAdmin) {
       qb.innerJoinAndSelect('alert.device', 'device')
         .andWhere('device.ownerId = :requesterId', { requesterId });
@@ -52,7 +52,7 @@ export class AlertsService {
         qb.andWhere('alert.deviceId = :deviceId', { deviceId });
       }
     } else {
-      // Admin: include device + owner relations for resource management
+      // Admin: lấy thêm cả quan hệ device + owner để quản lý tài nguyên
       qb.leftJoinAndSelect('alert.device', 'device')
         .leftJoinAndSelect('device.owner', 'owner');
 
@@ -75,7 +75,7 @@ export class AlertsService {
   }
 
   /**
-   * Retrieves a single alert by ID with ownership check.
+   * Lấy một alert theo ID kèm kiểm tra quyền sở hữu.
    */
   async findOne(
     id: string,
@@ -100,7 +100,7 @@ export class AlertsService {
   }
 
   /**
-   * Marks an alert as resolved.
+   * Đánh dấu một alert đã được xử lý (resolved).
    */
   async resolve(
     id: string,
@@ -113,7 +113,7 @@ export class AlertsService {
   }
 
   /**
-   * Creates a new alert record (used by AlertsConsumer from Kafka pipeline).
+   * Tạo bản ghi alert mới (được gọi từ AlertsConsumer trong pipeline Kafka).
    */
   async create(dto: CreateAlertDto): Promise<Alert> {
     const alert = this.alertRepository.create(dto);
@@ -121,7 +121,7 @@ export class AlertsService {
   }
 
   /**
-   * Finds the latest image media log that shares the same device and snapshot correlation ID.
+   * Tìm media log ảnh mới nhất có cùng deviceId và snapshotId (correlation ID) với alert.
    */
   async findSnapshotMediaLog(
     deviceId: string,
@@ -138,7 +138,7 @@ export class AlertsService {
   }
 
   /**
-   * Links an existing alert to a snapshot image when both share a correlation ID.
+   * Gắn ảnh snapshot vào alert đã tồn tại khi cả hai có cùng correlation ID.
    */
   async linkSnapshotMedia(
     deviceId: string,

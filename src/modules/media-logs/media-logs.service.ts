@@ -42,9 +42,9 @@ export class MediaLogsService implements OnModuleInit {
   ) {}
 
   /**
-   * Retrieves a paginated list of media logs.
-   * Non-admin users are restricted to logs from devices they own,
-   * using an INNER JOIN instead of a separate device query (avoids N+1 anti-pattern).
+   * Lấy danh sách media log có phân trang.
+   * User không phải admin chỉ xem được log của thiết bị mình sở hữu,
+   * dùng INNER JOIN thay vì query thiết bị riêng để tránh N+1.
    */
   async findAll(
     query: MediaLogQueryDto,
@@ -63,7 +63,7 @@ export class MediaLogsService implements OnModuleInit {
     } = query;
     const qb = this.mediaLogRepository.createQueryBuilder('mediaLog');
 
-    // For non-admin, use INNER JOIN to filter by device ownership in one query
+    // User thường: join thẳng với bảng device để lọc theo quyền sở hữu trong 1 query duy nhất
     if (!isAdmin) {
       qb.innerJoin(
         Device,
@@ -96,7 +96,7 @@ export class MediaLogsService implements OnModuleInit {
   }
 
   /**
-   * Retrieves a single media log by ID with ownership check.
+   * Lấy một media log theo ID, có kiểm tra quyền sở hữu.
    */
   async findOne(
     id: string,
@@ -121,9 +121,9 @@ export class MediaLogsService implements OnModuleInit {
   }
 
   /**
-   * Generates a short-lived presigned URL for secure media streaming/download.
-   * Uses the s3Key stored on the MediaLog record to generate a time-limited GET URL
-   * via StorageService, instead of returning a static (inaccessible) file URL.
+   * Tạo presigned URL có thời hạn ngắn để stream/tải media an toàn.
+   * Dùng s3Key lưu trong MediaLog để sinh URL GET có hạn qua StorageService,
+   * thay vì trả về URL tĩnh (không truy cập được vì bucket private).
    */
   async getStreamUrl(
     id: string,
@@ -146,7 +146,7 @@ export class MediaLogsService implements OnModuleInit {
       return { url: log.fileUrl };
     }
 
-    // Generate a presigned GET URL valid for 1 hour (3600s)
+    // Sinh presigned GET URL có hiệu lực 1 giờ (3600s)
     const presignedUrl = await this.storageService.getPresignedUrl(s3KeyToUse);
     if (!presignedUrl) {
       throw new NotFoundException(
@@ -158,7 +158,7 @@ export class MediaLogsService implements OnModuleInit {
   }
 
   /**
-   * Request asynchronous Optical Flow processing using the local AI worker via Kafka
+   * Gửi yêu cầu xử lý Optical Flow bất đồng bộ tới AI worker thông qua Kafka
    */
   async requestOpticalFlowAnalysis(
     id: string,
@@ -177,7 +177,7 @@ export class MediaLogsService implements OnModuleInit {
     log.processingError = null;
     await this.mediaLogRepository.save(log);
 
-    // Send processing request to Kafka
+    // Đẩy job xử lý sang Kafka để AI worker xử lý bất đồng bộ
     const jobPayload = {
       jobId: log.id,
       deviceId: log.deviceId,
@@ -207,31 +207,31 @@ export class MediaLogsService implements OnModuleInit {
   }
 
   /**
-   * Creates a new media log record.
+   * Tạo một bản ghi media log mới.
    */
   async create(data: Partial<MediaLog>): Promise<MediaLog> {
     const log = this.mediaLogRepository.create(data);
     return this.mediaLogRepository.save(log);
   }
 
-  // ─── Presigned URL Upload Flow (Out-of-band) ───────────────────────────────
+  // ─── Luồng upload qua Presigned URL (Out-of-band) ───────────────────────────────
 
   /**
-   * Generates a presigned PUT URL for direct-to-S3 media upload.
+   * Sinh presigned PUT URL để thiết bị upload media thẳng lên S3.
    *
-   * This implements the "Out-of-band Upload" pattern:
-   * 1. Device requests a presigned URL via this lightweight REST call
-   * 2. Device uploads the raw binary file directly to S3 using HTTP PUT
-   * 3. Device confirms the upload via confirmUpload()
+   * Đây là pattern "Out-of-band Upload":
+   * 1. Thiết bị gọi REST API nhẹ này để xin presigned URL
+   * 2. Thiết bị upload file nhị phân trực tiếp lên S3 bằng HTTP PUT
+   * 3. Thiết bị xác nhận đã upload xong qua confirmUpload()
    *
-   * Benefits over the Base64/MQTT pipeline:
-   * - No payload size limitation from MQTT broker
-   * - No Base64 encoding overhead (33% size inflation)
-   * - No Kafka message bloat
-   * - Supports resume on network interruption (HTTP range requests)
+   * Ưu điểm so với pipeline Base64/MQTT cũ:
+   * - Không bị giới hạn payload size của MQTT broker
+   * - Không tốn overhead encode Base64 (phình thêm ~33% dung lượng)
+   * - Không làm phình message Kafka
+   * - Hỗ trợ resume khi mạng bị ngắt giữa chừng (HTTP range request)
    *
-   * @param dto - Contains deviceId, file extension, and optional custom filename
-   * @returns Object containing the presigned upload URL, s3Key, and expiration time
+   * @param dto - Chứa deviceId, đuôi file, và tên file tuỳ chọn
+   * @returns Presigned upload URL, s3Key và thời gian hết hạn
    */
   async requestUploadUrl(dto: RequestUploadUrlDto): Promise<{
     uploadUrl: string;
@@ -239,18 +239,18 @@ export class MediaLogsService implements OnModuleInit {
     mimeType: string;
     expiresIn: number;
   }> {
-    // Step 1: Verify the device exists in the system
+    // Bước 1: Kiểm tra thiết bị có tồn tại trong hệ thống
     await this.devicesService.findOneById(dto.deviceId);
 
-    // Step 2: Resolve MIME type from the file extension
+    // Bước 2: Xác định MIME type dựa vào đuôi file
     const mimeType = EXTENSION_MIME_MAP[dto.fileExtension];
 
-    // Step 3: Build the S3 object key
+    // Bước 3: Build S3 object key
     const baseName = dto.filename || `${Date.now()}-${dto.deviceId}`;
     const filename = `${baseName}.${dto.fileExtension}`;
     const s3Key = `media-logs/${dto.deviceId}/${filename}`;
 
-    // Step 4: Generate the presigned PUT URL (valid for 1 hour)
+    // Bước 4: Sinh presigned PUT URL (hiệu lực 1 giờ)
     const expiresIn = 3600;
     const uploadUrl = await this.storageService.getPresignedUploadUrl(
       s3Key,
@@ -266,11 +266,11 @@ export class MediaLogsService implements OnModuleInit {
   }
 
   /**
-   * NestJS module initialization hook.
-   * Starts a background cron-like interval sweeping S3 bucket for orphaned files.
+   * Hook khởi tạo module của NestJS.
+   * Chạy một interval kiểu cron ở background để quét dọn file rác trên S3.
    */
   async onModuleInit() {
-    // Ensure PostGIS geom column exists on media_logs
+    // Đảm bảo cột geom (PostGIS) tồn tại trên bảng media_logs, tự tạo nếu thiếu
     try {
       await this.mediaLogRepository.query(`
         ALTER TABLE media_logs ADD COLUMN IF NOT EXISTS geom geometry(Point, 4326);
@@ -280,12 +280,12 @@ export class MediaLogsService implements OnModuleInit {
       this.logger.error('Failed to verify media_logs geom column in onModuleInit:', err);
     }
 
-    // Do not schedule intervals during test runs to prevent Jest open handles leak
+    // Không schedule interval khi chạy test để tránh Jest bị leak open handle
     if (process.env.NODE_ENV === 'test') {
       return;
     }
 
-    // Run sweep clean-up 30s after boot, and then every 24 hours
+    // Quét dọn lần đầu sau 30s kể từ lúc boot, sau đó lặp lại mỗi 24 giờ
     setTimeout(() => {
       this.cleanupOrphanedFiles().catch(() => {});
     }, 30000);
@@ -295,19 +295,19 @@ export class MediaLogsService implements OnModuleInit {
   }
 
   /**
-   * Confirms that a device has successfully uploaded a media file to S3
-   * using the presigned URL from requestUploadUrl().
+   * Xác nhận thiết bị đã upload thành công file media lên S3
+   * bằng presigned URL lấy từ requestUploadUrl().
    *
-   * Enforces strict file existence check via S3 HeadObject and size limit validations.
+   * Kiểm tra chặt chẽ file có thực sự tồn tại (qua S3 HeadObject) và validate kích thước.
    *
-   * @param dto - Contains deviceId, s3Key (from requestUploadUrl), and mediaType
-   * @returns The newly created MediaLog record
+   * @param dto - Chứa deviceId, s3Key (lấy từ requestUploadUrl) và mediaType
+   * @returns Bản ghi MediaLog vừa được tạo
    */
   async confirmUpload(dto: ConfirmUploadDto): Promise<MediaLog> {
-    // Step 1: Verify the device exists
+    // Bước 1: Kiểm tra thiết bị tồn tại
     await this.devicesService.findOneById(dto.deviceId);
 
-    // Step 2: Query S3 object metadata to verify the file was actually uploaded and check its size
+    // Bước 2: Lấy metadata của object trên S3 để xác nhận file đã được upload thật và kiểm tra size
     const s3Meta = await this.storageService.getObjectMetadata(dto.s3Key);
     if (!s3Meta) {
       throw new NotFoundException(
@@ -315,15 +315,15 @@ export class MediaLogsService implements OnModuleInit {
       );
     }
 
-    // Step 3: Enforce strict file size limits
-    // Max 10MB for images, Max 100MB for videos
+    // Bước 3: Giới hạn kích thước file tối đa
+    // Ảnh tối đa 10MB, video tối đa 100MB
     const maxLimit =
       dto.mediaType === ConfirmMediaType.IMAGE
         ? 10 * 1024 * 1024 // 10MB
         : 100 * 1024 * 1024; // 100MB
 
     if (s3Meta.size > maxLimit) {
-      // Clean up the violating file from S3 immediately
+      // File vượt quá giới hạn thì xoá luôn khỏi S3 để tránh rác
       try {
         const s3Client = this.storageService.getS3Client();
         const bucket = this.storageService.getBucket();
@@ -342,13 +342,13 @@ export class MediaLogsService implements OnModuleInit {
       );
     }
 
-    // Step 4: Map the simple media type to the entity enum
+    // Bước 4: Map media type đơn giản từ DTO sang enum của entity
     const mappedMediaType =
       dto.mediaType === ConfirmMediaType.IMAGE
         ? MediaType.IMAGE_FRAME
         : MediaType.VIDEO_CHUNK;
 
-    // Step 5: Determine coordinates (Directly from DTO or fallback to closest telemetry)
+    // Bước 5: Xác định toạ độ (lấy trực tiếp từ DTO, nếu không có thì fallback sang telemetry gần nhất)
     let lat = dto.lat ?? null;
     let lng = dto.lng ?? null;
     const startTime = new Date();
@@ -361,7 +361,7 @@ export class MediaLogsService implements OnModuleInit {
       }
     }
 
-    // Step 6: Create and persist the media log record
+    // Bước 6: Tạo và lưu bản ghi media log
     const log = this.mediaLogRepository.create({
       deviceId: dto.deviceId,
       mediaType: mappedMediaType,
@@ -376,7 +376,7 @@ export class MediaLogsService implements OnModuleInit {
 
     const savedLog = await this.mediaLogRepository.save(log);
 
-    // If coordinates are available, update the PostGIS geom column
+    // Có toạ độ thì mới cập nhật cột geom (PostGIS) để phục vụ query theo vị trí
     if (lat !== null && lng !== null) {
       await this.mediaLogRepository.query(
         `UPDATE media_logs SET geom = ST_SetSRID(ST_MakePoint($1, $2), 4326) WHERE id = $3`,
@@ -407,8 +407,8 @@ export class MediaLogsService implements OnModuleInit {
   }
 
   /**
-   * Private helper to find the telemetry coordinate closest to a given timestamp.
-   * Performs index-scans for points before and after, then returns the closest one.
+   * Helper tìm toạ độ telemetry gần nhất với một mốc thời gian cho trước.
+   * Quét 1 điểm trước và 1 điểm sau mốc thời gian đó, rồi chọn điểm nào gần hơn.
    */
   private async findClosestTelemetry(
     deviceId: string,
@@ -466,7 +466,7 @@ export class MediaLogsService implements OnModuleInit {
   }
 
   /**
-   * Retrieves media logs with geographical coordinates (lat IS NOT NULL) within a time range.
+   * Lấy các media log có toạ độ địa lý (lat khác null) trong một khoảng thời gian.
    */
   async findMapPins(
     query: { deviceId?: string; from?: string; to?: string },
@@ -501,12 +501,12 @@ export class MediaLogsService implements OnModuleInit {
   }
 
   /**
-   * Sweeps the S3 bucket's "media-logs/" prefix, identifying files older than 24 hours
-   * that have no corresponding database record in the `media_logs` table, and deletes them.
+   * Quét toàn bộ file trong prefix "media-logs/" trên S3, tìm những file cũ hơn 24h
+   * mà không có bản ghi tương ứng trong bảng `media_logs`, rồi xoá chúng.
    *
-   * NOTE: This check must verify BOTH `s3Key` (original upload) and `processedS3Key`
-   * (AI-processed/optical flow results) to avoid deleting AI analysis files that are
-   * saved under the same prefix in the S3 bucket.
+   * LƯU Ý: Phải kiểm tra CẢ `s3Key` (file gốc) lẫn `processedS3Key` (kết quả AI xử lý
+   * optical flow), vì file AI cũng được lưu cùng prefix trên S3 — nếu chỉ check s3Key
+   * sẽ xoá nhầm file kết quả AI.
    */
   async cleanupOrphanedFiles(): Promise<void> {
     this.logger.log('Starting orphaned media files sweep clean-up...');
@@ -527,12 +527,12 @@ export class MediaLogsService implements OnModuleInit {
       for (const obj of objects) {
         if (!obj.Key || !obj.LastModified) continue;
 
-        // Only target files older than 24 hours
+        // Chỉ xử lý file cũ hơn 24 giờ, tránh xoá nhầm file vừa upload
         if (obj.LastModified > oneDayAgo) continue;
 
-        // Query database to see if the file key matches either:
-        // 1. The original upload key (s3Key)
-        // 2. The AI-processed output key (processedS3Key)
+        // Kiểm tra key này có khớp với:
+        // 1. Key upload gốc (s3Key), hoặc
+        // 2. Key kết quả AI xử lý (processedS3Key)
         const dbRecord = await this.mediaLogRepository.findOne({
           where: [
             { s3Key: obj.Key },

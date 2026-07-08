@@ -33,10 +33,10 @@ export class BetterAuthErrorExceptionFilter implements ExceptionFilter {
       error.body?.message || error.message || 'Authentication error';
     const correlationId = getCorrelationId(request);
 
-    // Log async (Fire-and-Forget) - Not block request
+    // Log bất đồng bộ (Fire-and-Forget) - không chặn request
     this.logExceptionAsync(error, correlationId);
 
-    // Standardized response format — consistent across all filters
+    // Định dạng response chuẩn hóa — đồng nhất với các filter khác
     response.status(status).json({
       statusCode: status,
       message,
@@ -45,14 +45,14 @@ export class BetterAuthErrorExceptionFilter implements ExceptionFilter {
   }
 
   /**
-   * Log exception async - Fire and Forget pattern
-   * Not await, not block request
+   * Log exception bất đồng bộ - theo pattern Fire and Forget
+   * Không await, không chặn request
    */
   private logExceptionAsync(
     error: BetterAuthError,
     correlationId: string,
   ): void {
-    // Use setImmediate to defer logging, not block current request
+    // Dùng setImmediate để đẩy việc log ra sau, không chặn request hiện tại
     setImmediate(() => {
       try {
         this.logger.error(

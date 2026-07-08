@@ -25,26 +25,26 @@ export class TelemetryService implements OnModuleInit {
   ) {}
 
   /**
-   * Ensures PostGIS geometry columns and spatial indexes exist on startup.
-   * If TimescaleDB is available, converts the telemetry table to a hypertable.
+   * Đảm bảo các cột geometry PostGIS và spatial index tồn tại khi app khởi động.
+   * Nếu có TimescaleDB thì convert bảng telemetry thành hypertable.
    */
   async onModuleInit(): Promise<void> {
     try {
-      // 1. Force refresh PostGIS (Drop and Recreate to fix library path issues)
-      // Since it's a new server, this is the safest way to fix Version Mismatch
+      // 1. Force refresh PostGIS (drop rồi tạo lại để fix lỗi sai đường dẫn thư viện)
+      // Vì đây là server mới nên cách này an toàn nhất để fix Version Mismatch
       try {
         await this.dataSource.query(`DROP EXTENSION IF EXISTS postgis CASCADE`);
       } catch {
         this.logger.warn('Could not drop postgis extension (might not exist)');
       }
-      
+
       await this.dataSource.query(`CREATE EXTENSION IF NOT EXISTS postgis`);
       await this.dataSource.query(
         `CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE`,
       );
 
 
-      // 2. Ensure geometry columns & indexes
+      // 2. Đảm bảo có đủ cột geometry & index
       await this.dataSource.query(`
         ALTER TABLE telemetry ADD COLUMN IF NOT EXISTS geom geometry(Point, 4326);
         CREATE INDEX IF NOT EXISTS idx_telemetry_geom ON telemetry USING GIST (geom);
@@ -54,8 +54,8 @@ export class TelemetryService implements OnModuleInit {
         CREATE INDEX IF NOT EXISTS idx_route_plans_geom ON route_plans USING GIST (geom);
       `);
 
-      // 3. Convert to Hypertable if not already done (TimescaleDB specific)
-      // We wrap this in a check to see if it's already a hypertable
+      // 3. Convert sang Hypertable nếu chưa làm (đặc thù TimescaleDB)
+      // Check trước xem đã là hypertable chưa để tránh chạy lại gây lỗi
       const isHypertable = await this.dataSource.query<{ count: string }[]>(`
         SELECT count(*) FROM _timescaledb_catalog.hypertable WHERE table_name = 'telemetry'
       `);
@@ -68,7 +68,7 @@ export class TelemetryService implements OnModuleInit {
           `SELECT create_hypertable('telemetry', 'timestamp', if_not_exists => TRUE)`,
         );
 
-        // 3a. Enable Compression (Job runs in background)
+        // 3a. Bật nén dữ liệu (job chạy nền, nén data cũ hơn 7 ngày theo device_id)
         await this.dataSource.query(`
           ALTER TABLE telemetry SET (
             timescaledb.compress,
@@ -77,7 +77,7 @@ export class TelemetryService implements OnModuleInit {
           SELECT add_compression_policy('telemetry', INTERVAL '7 days');
         `);
 
-        // 3b. Enable Statistics/Retention (Keep 6 months of raw data)
+        // 3b. Bật retention (chỉ giữ dữ liệu thô trong 6 tháng, quá hạn tự xóa)
         await this.dataSource.query(`
           SELECT add_retention_policy('telemetry', INTERVAL '6 months');
         `);
@@ -86,7 +86,7 @@ export class TelemetryService implements OnModuleInit {
       }
 
 
-      // 4. Backfill missing geoms
+      // 4. Backfill geom cho các row còn thiếu (dữ liệu cũ trước khi có cột geom)
       await this.dataSource.query(
         `UPDATE telemetry SET geom = ST_SetSRID(ST_MakePoint(lng, lat), 4326) WHERE geom IS NULL`,
       );
@@ -98,8 +98,8 @@ export class TelemetryService implements OnModuleInit {
   }
 
   /**
-   * Persists a single GPS coordinate point for a device in a single SQL operation.
-   * Calculates the PostGIS geometry point during INSERT for maximum performance.
+   * Lưu 1 điểm tọa độ GPS của thiết bị bằng 1 câu SQL duy nhất.
+   * Tính luôn geometry PostGIS ngay trong lúc INSERT để tối ưu hiệu năng.
    */
   async savePoint(deviceId: string, payload: CoordinatePayload): Promise<void> {
     await this.dataSource.query(
@@ -120,14 +120,15 @@ export class TelemetryService implements OnModuleInit {
   }
 
   /**
-   * Persists a batch of telemetry points in a single multi-row INSERT.
-   * This is the preferred method for high-throughput ingestion.
+   * Lưu 1 batch điểm telemetry bằng 1 câu INSERT nhiều dòng.
+   * Đây là cách được ưu tiên dùng khi lượng dữ liệu đổ về lớn.
    */
   async saveBatch(
     points: { deviceId: string; payload: CoordinatePayload }[],
   ): Promise<void> {
     if (points.length === 0) return;
 
+    // Build câu VALUES động theo số lượng điểm, mỗi điểm chiếm 7 tham số
     const values = points
       .map(
         (_, i) =>
@@ -158,7 +159,7 @@ export class TelemetryService implements OnModuleInit {
     requesterId: string,
     isAdmin: boolean,
   ): Promise<GetManyBaseResponseDto<Telemetry>> {
-    await this.devicesService.findOne(deviceId, requesterId, isAdmin); // ownership check
+    await this.devicesService.findOne(deviceId, requesterId, isAdmin); // check quyền sở hữu thiết bị
 
     const {
       page = 1,
@@ -188,7 +189,7 @@ export class TelemetryService implements OnModuleInit {
     requesterId: string,
     isAdmin: boolean,
   ): Promise<Telemetry> {
-    await this.devicesService.findOne(deviceId, requesterId, isAdmin); // ownership check
+    await this.devicesService.findOne(deviceId, requesterId, isAdmin); // check quyền sở hữu thiết bị
 
     const latest = await this.telemetryRepository.findOne({
       where: { deviceId },
@@ -201,10 +202,10 @@ export class TelemetryService implements OnModuleInit {
   }
 
   /**
-   * Returns the latest telemetry point for a device WITHOUT ownership checks.
-   * Used internally by system consumers (e.g., AlertsConsumer) to look up
-   * the most recent GPS coordinates for AI-generated alerts.
-   * Returns null (instead of throwing) when no telemetry exists.
+   * Lấy điểm telemetry mới nhất của thiết bị, KHÔNG check quyền sở hữu.
+   * Dùng nội bộ cho các consumer hệ thống (vd: AlertsConsumer) để lấy tọa độ
+   * GPS gần nhất phục vụ cảnh báo do AI sinh ra.
+   * Trả về null (thay vì throw) nếu chưa có dữ liệu telemetry nào.
    */
   async findLatestByDevice(deviceId: string): Promise<Telemetry | null> {
     return this.telemetryRepository.findOne({
@@ -214,8 +215,8 @@ export class TelemetryService implements OnModuleInit {
   }
 
   /**
-   * Returns the latest telemetry point for EVERY device in a single query.
-   * Uses PostgreSQL DISTINCT ON to efficiently pick the newest row per device_id.
+   * Lấy điểm telemetry mới nhất của TẤT CẢ thiết bị chỉ bằng 1 câu query.
+   * Dùng DISTINCT ON của PostgreSQL để lấy hiệu quả dòng mới nhất theo device_id.
    */
   async findLatestAll(): Promise<Telemetry[]> {
     return this.telemetryRepository.query(`
@@ -226,8 +227,8 @@ export class TelemetryService implements OnModuleInit {
   }
 
   /**
-   * Returns the latest telemetry point for every device owned by the requester.
-   * Uses DISTINCT ON to avoid N+1 queries from dashboard screens.
+   * Lấy điểm telemetry mới nhất của mọi thiết bị thuộc sở hữu của requester.
+   * Dùng DISTINCT ON để tránh N+1 query khi load màn hình dashboard.
    */
   async findLatestMine(ownerId: string): Promise<Telemetry[]> {
     return this.telemetryRepository.query<Telemetry[]>(
@@ -245,7 +246,7 @@ export class TelemetryService implements OnModuleInit {
   }
 
   async findNearby(query: NearbyQueryDto): Promise<Telemetry[]> {
-    // PostGIS query for nearby telemetry points
+    // Query PostGIS tìm các điểm telemetry nằm trong bán kính cho trước
     return this.telemetryRepository.query(
       `
       SELECT *, ST_AsGeoJSON(geom) as geom

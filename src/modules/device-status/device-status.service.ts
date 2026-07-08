@@ -17,25 +17,25 @@ export class DeviceStatusService {
 
 
   /**
-   * Retrieves the current status record for a device.
-   * If no status exists yet (first query), creates and persists a default
-   * record so the client always receives a valid entity with an ID.
+   * Lấy bản ghi trạng thái hiện tại của thiết bị.
+   * Nếu chưa có trạng thái nào (lần đầu query), tạo và lưu một bản ghi mặc định
+   * để client luôn nhận được entity hợp lệ có ID.
    */
   async findByDevice(
     deviceId: string,
     requesterId: string,
     isAdmin: boolean,
   ): Promise<DeviceStatus> {
-    // Step 1: Verify device exists and requester has ownership
+    // Bước 1: Kiểm tra thiết bị tồn tại và requester có quyền sở hữu
     await this.devicesService.findOne(deviceId, requesterId, isAdmin);
 
-    // Step 2: Look up existing status (fetching device relation for metadata)
+    // Bước 2: Tìm trạng thái hiện có (kèm relation device để lấy metadata)
     let status = await this.deviceStatusRepository.findOne({
       where: { deviceId },
       relations: ['device'],
     });
 
-    // Step 3: If no status exists, create and persist a default record
+    // Bước 3: Nếu chưa có trạng thái nào thì tạo và lưu bản ghi mặc định
     if (!status) {
       status = this.deviceStatusRepository.create({
         deviceId,
@@ -57,16 +57,16 @@ export class DeviceStatusService {
   }
 
   /**
-   * Returns all device-status records.
-   * Used by admin pages that need to display status for every device at once.
+   * Trả về toàn bộ bản ghi trạng thái thiết bị.
+   * Dùng cho trang admin cần hiển thị trạng thái của tất cả thiết bị cùng lúc.
    */
   async findAll(): Promise<DeviceStatus[]> {
     return this.deviceStatusRepository.find({ relations: ['device'] });
   }
 
   /**
-   * Returns status rows for every device owned by the requester.
-   * Devices without a heartbeat record are represented as offline defaults.
+   * Trả về trạng thái của tất cả thiết bị mà requester sở hữu.
+   * Thiết bị chưa có bản ghi heartbeat nào sẽ mặc định coi là offline.
    */
   async findMine(ownerId: string): Promise<DeviceStatus[]> {
     return this.dataSource.query<DeviceStatus[]>(

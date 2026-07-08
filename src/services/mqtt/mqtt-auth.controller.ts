@@ -23,6 +23,7 @@ export class MqttAuthController {
   async authenticate(
     @Body() dto: MqttAuthRequestDto,
   ): Promise<MqttAuthResponse> {
+    // Gateway client (backend) được cấp quyền superuser, không bị giới hạn ACL
     if (this.isGatewayClient(dto.username, dto.password)) {
       return {
         result: 'allow',
@@ -30,6 +31,7 @@ export class MqttAuthController {
       };
     }
 
+    // Còn lại xác thực theo credentials MQTT riêng của từng thiết bị
     const device = await this.devicesService.verifyMqttCredentials(
       dto.username,
       dto.password,
@@ -49,7 +51,7 @@ export class MqttAuthController {
   }
 
   /**
-   * Allows the backend gateway client to bridge device MQTT messages and send commands.
+   * Cho phép gateway client của backend bridge message MQTT của thiết bị và gửi lệnh xuống.
    */
   private isGatewayClient(username: string, password: string): boolean {
     const gatewayUsername = this.configService.get<string>('MQTT_USERNAME');
@@ -59,7 +61,8 @@ export class MqttAuthController {
   }
 
   /**
-   * Restricts a device to its own telemetry/media topics and command subscription.
+   * Giới hạn thiết bị chỉ được publish topic telemetry/media của chính nó
+   * và subscribe topic command của chính nó.
    */
   private buildDeviceAcl(deviceId: string): MqttAclRule[] {
     return [
